@@ -1,0 +1,4575 @@
+{
+  "info": {
+    "_postman_id": "9ce5352c-e760-4b0d-8d17-7db9ddb4ef5f",
+    "name": "EduCert Pro — Complete API",
+    "description": "# EduCert Pro API Collection\n\n**Base URL:** `http://localhost:5000`\n\n## How to Use\n1. Import this collection into Postman.\n2. Create an Environment with variable `baseUrl = http://localhost:5000/api`.\n3. Run the **Auth** folder first — login/register requests auto-save tokens and IDs into collection variables.\n4. Subsequent requests reuse `{{token}}`, `{{instructorToken}}`, `{{adminToken}}`, `{{examId}}`, `{{attemptId}}`, etc.\n\n## Variable Reference\n| Variable | Set By | Used By |\n|---|---|---|\n| `token` | Student login | All student requests |\n| `instructorToken` | Instructor login | All instructor requests |\n| `adminToken` | Admin login | All admin requests |\n| `resetToken` | Verify OTP | Reset Password |\n| `examId` | Create Exam | Exam, Question, Attempt, Result routes |\n| `questionId` | Create Question | Add/Remove from exam |\n| `attemptId` | Start Exam | Save Answer, Submit, Cheat Event |\n| `certId` | Submit Exam (passed) | Verify Certificate |\n| `notifId` | Get Notifications | Mark Read, Delete |\n\n## Rate Limits\n- Auth endpoints (register, login, forgot-password): **10 requests / 15 min per IP**\n- All other API endpoints: **2000 requests / 15 min per IP**\n\n## Error Shape\nAll errors follow: `{ status: \"fail\" | \"error\", message: \"...\" }`\n",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000/api",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "instructorToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "adminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "resetToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "examId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "questionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "attemptId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "certId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "notifId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "certMongoId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Authentication",
+      "description": "## Authentication Routes\n**Base:** `/api/auth`\n**Rate limit:** 10 req / 15 min on register, login, forgot-password.\n\nAll successful auth responses return a JWT `token` in the root of the response body.\nStore it and send as `Authorization: Bearer <token>` on protected routes.\n\n### OTP Password Reset Flow (3 steps)\n1. POST /forgot-password → OTP emailed\n2. POST /verify-reset-otp → returns `resetToken` (10 min expiry)\n3. POST /reset-password with `Authorization: Bearer <resetToken>`\n",
+      "item": [
+        {
+          "name": "Register Student",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"Response is JSON\", () => pm.response.to.be.json);",
+                  "pm.test(\"Has field: token\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"token\"); });",
+                  "pm.test(\"Has field: data.user._id\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.user._id\"); });",
+                  "const _j = pm.response.json(); if(_j && _j.token !== undefined){ pm.collectionVariables.set(\"token\", _j.token); pm.environment.set(\"token\", _j.token); }",
+                  "const _j = pm.response.json(); if(_j && _j.data.user._id !== undefined){ pm.collectionVariables.set(\"userId\", _j.data.user._id); pm.environment.set(\"userId\", _j.data.user._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "**POST /api/auth/register**\n\nRegisters a new user account.\n\n**Role:** Public (no token needed)\n**Rate limited:** Yes (10/15min)\n\n### Request Body\n| Field | Type | Required | Notes |\n|---|---|---|---|\n| name | string | ✅ | Display name |\n| email | string | ✅ | Must be valid email format |\n| password | string | ✅ | Min 6 characters |\n| role | string | ❌ | \"student\" (default) or \"instructor\". Cannot self-assign \"admin\" |\n\n### Success Response (201)\n```json\n{\n  \"status\": \"success\",\n  \"message\": \"Account created successfully\",\n  \"token\": \"<jwt>\",\n  \"data\": { \"user\": { \"_id\": \"...\", \"name\": \"...\", \"email\": \"...\", \"role\": \"student\" } }\n}\n```\n\n### Error Responses\n| Code | Condition |\n|---|---|\n| 400 | Missing name/email/password, invalid email format, password < 6 chars |\n| 409 | Email already registered |\n\n### Test Cases\n- **TC-AUTH-01:** Valid student registration → 201, token returned\n- **TC-AUTH-02:** Duplicate email → 409\n- **TC-AUTH-03:** Password < 6 chars → 400\n- **TC-AUTH-04:** Missing name → 400\n- **TC-AUTH-05:** role:\"admin\" in body → role silently set to \"student\"",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Student\",\n  \"email\": \"student@test.com\",\n  \"password\": \"password123\",\n  \"role\": \"student\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Register Instructor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 201\", () => pm.response.to.have.status(201));",
+                  "const _j = pm.response.json(); if(_j && _j.token !== undefined){ pm.collectionVariables.set(\"instructorToken\", _j.token); pm.environment.set(\"instructorToken\", _j.token); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "Registers an instructor account. Sets instructorToken variable for use in instructor-only routes.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Instructor\",\n  \"email\": \"instructor@test.com\",\n  \"password\": \"password123\",\n  \"role\": \"instructor\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login Student",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: token\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"token\"); });",
+                  "const _j = pm.response.json(); if(_j && _j.token !== undefined){ pm.collectionVariables.set(\"token\", _j.token); pm.environment.set(\"token\", _j.token); }",
+                  "const _j = pm.response.json(); if(_j && _j.data.user._id !== undefined){ pm.collectionVariables.set(\"userId\", _j.data.user._id); pm.environment.set(\"userId\", _j.data.user._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "**POST /api/auth/login**\n\nAuthenticates a user and returns a JWT.\n\n**Role:** Public\n**Rate limited:** Yes (10/15min)\n\n### Security Details\n- Runs a dummy bcrypt compare even when email doesn't exist (timing-attack prevention)\n- Returns the **same** error message for wrong email and wrong password (no account enumeration)\n- Checks `isActive` AFTER password verification (prevents revealing whether email exists)\n\n### Request Body\n| Field | Type | Required |\n|---|---|---|\n| email | string | ✅ |\n| password | string | ✅ |\n\n### Success Response (200)\n```json\n{\n  \"status\": \"success\",\n  \"token\": \"<jwt>\",\n  \"data\": { \"user\": { \"_id\":\"...\", \"name\":\"...\", \"email\":\"...\", \"role\":\"student\", \"profilePhoto\":\"\" } }\n}\n```\n\n### Error Responses\n| Code | Condition |\n|---|---|\n| 400 | Missing email or password |\n| 401 | Wrong email or wrong password (same message for both) |\n| 403 | Account deactivated |\n\n### Test Cases\n- **TC-AUTH-06:** Valid credentials → 200, token returned\n- **TC-AUTH-07:** Wrong password → 401, \"Invalid email or password\"\n- **TC-AUTH-08:** Non-existent email → 401, same message as wrong password\n- **TC-AUTH-09:** Deactivated account → 403",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"student@test.com\",\n  \"password\": \"password123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login Instructor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "const _j = pm.response.json(); if(_j && _j.token !== undefined){ pm.collectionVariables.set(\"instructorToken\", _j.token); pm.environment.set(\"instructorToken\", _j.token); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "Login as instructor. Saves instructorToken.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"instructor@test.com\",\n  \"password\": \"password123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "const _j = pm.response.json(); if(_j && _j.token !== undefined){ pm.collectionVariables.set(\"adminToken\", _j.token); pm.environment.set(\"adminToken\", _j.token); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "Login as admin. Saves adminToken. Admin accounts must be created directly in DB or promoted by another admin.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@test.com\",\n  \"password\": \"adminpassword\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Forgot Password (Send OTP)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Response is JSON\", () => pm.response.to.be.json);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/forgot-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "forgot-password"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "**POST /api/auth/forgot-password**\n\nStep 1 of 3 in the password reset flow.\n\nSends a 6-digit OTP to the provided email. The OTP is SHA-256 hashed before storing — only the hash is in the database.\n\n**Rate limited:** Yes\n\n### Security Notes\n- Always responds 200 even if email doesn't exist (prevents email enumeration)\n- OTP expires in 10 minutes\n- If email delivery fails, OTP is cleared and error returned\n\n### Test Cases\n- **TC-AUTH-10:** Valid registered email → 200, \"If this email is registered...\"\n- **TC-AUTH-11:** Unknown email → 200, same message (no enumeration)\n- **TC-AUTH-12:** Missing email → 400",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"student@test.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Reset OTP",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "const _j = pm.response.json(); if(_j && _j.resetToken !== undefined){ pm.collectionVariables.set(\"resetToken\", _j.resetToken); pm.environment.set(\"resetToken\", _j.resetToken); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/verify-reset-otp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "verify-reset-otp"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "**POST /api/auth/verify-reset-otp**\n\nStep 2 of 3. Submit the OTP received by email.\n\nReturns a short-lived `resetToken` JWT (10 min, purpose:\"reset_password\") that must be used in step 3.\n\n### Test Cases\n- **TC-AUTH-13:** Correct OTP → 200, resetToken returned\n- **TC-AUTH-14:** Wrong OTP → 400, \"Invalid OTP\"\n- **TC-AUTH-15:** Expired OTP (after 10 min) → 400, \"OTP has expired\"\n- **TC-AUTH-16:** No OTP requested for email → 400",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"student@test.com\",\n  \"otp\": \"123456\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reset Password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "const _j = pm.response.json(); if(_j && _j.token !== undefined){ pm.collectionVariables.set(\"token\", _j.token); pm.environment.set(\"token\", _j.token); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "reset-password"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "**POST /api/auth/reset-password**\n\nStep 3 of 3. Requires `Authorization: Bearer <resetToken>` from step 2.\n\nThe resetToken carries `purpose: \"reset_password\"` — a normal login JWT will be rejected.\n\n### Test Cases\n- **TC-AUTH-17:** Valid resetToken + matching passwords → 200, new login token returned\n- **TC-AUTH-18:** Password mismatch → 400, \"Passwords do not match\"\n- **TC-AUTH-19:** Normal login token instead of resetToken → 401, \"Invalid reset token\"\n- **TC-AUTH-20:** resetToken expired (after 10 min) → 401",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{resetToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newPassword\": \"newpassword123\",\n  \"confirmPassword\": \"newpassword123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ],
+      "event": [],
+      "_postman_isSubFolder": true
+    },
+    {
+      "name": "2. Users (Profile)",
+      "description": "## User Routes\n**Base:** `/api/users`\n**Auth:** Bearer token required for all routes.\n\nThese routes let any authenticated user manage their own profile.\nPassword changes use the Auth flow (forgot-password → verify-otp → reset-password).\n",
+      "item": [
+        {
+          "name": "Get My Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.user._id\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.user._id\"); });",
+                  "pm.test(\"Response is JSON\", () => pm.response.to.be.json);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "me"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "**GET /api/users/me**\n\nReturns the logged-in user's profile. No DB query — user is already loaded by the protect middleware.\n\n### Success Response (200)\n```json\n{ \"status\":\"success\", \"data\": { \"user\": { \"_id\":\"...\", \"name\":\"...\", \"email\":\"...\", \"role\":\"...\", \"isActive\":true, \"profilePhoto\":\"\" } } }\n```\n\n### Test Cases\n- **TC-USR-01:** Valid token → 200, user object returned\n- **TC-USR-02:** No token → 401",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.user.name\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.user.name\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "me"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "**PUT /api/users/me**\n\nUpdates name and/or email for the logged-in user.\n\n### Notes\n- Only `name` and `email` are accepted — password cannot be changed here\n- Email uniqueness is enforced (409 if taken)\n- Schema validators (email format) run again on update\n\n### Test Cases\n- **TC-USR-03:** Valid name update → 200, updated user returned\n- **TC-USR-04:** Duplicate email → 409\n- **TC-USR-05:** Invalid email format → 400",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Name\",\n  \"email\": \"newemail@test.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Upload Profile Photo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.profilePhoto\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.profilePhoto\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/me/photo",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "me",
+                "photo"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "**POST /api/users/me/photo**\n\nUploads a profile photo. Must be sent as `multipart/form-data` with field name `photo`.\n\n**⚠️ Change Body type to \"form-data\" in Postman, add key \"photo\" (File type), select image file.**\n\n### Constraints (Multer middleware)\n- Field name must be `photo`\n- Accepted MIME types: image/jpeg, image/png, image/webp\n- Max file size: 2 MB\n\n### Success Response (200)\n```json\n{ \"status\":\"success\", \"message\":\"Profile photo updated.\", \"data\": { \"profilePhoto\": \"/uploads/photo-userId-timestamp.jpg\" } }\n```\n\n### Test Cases\n- **TC-USR-06:** Valid JPG under 2MB → 200, photoPath returned\n- **TC-USR-07:** No file sent → 400, \"Please upload an image file\"\n- **TC-USR-08:** File over 2MB → 400 (Multer rejects)\n- **TC-USR-09:** Wrong field name → 400",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "event": [],
+      "_postman_isSubFolder": true
+    },
+    {
+      "name": "3. Exams",
+      "description": "## Exam Routes\n**Base:** `/api/exams`\n**Auth:** Bearer token required for all routes.\n\n### Role Filtering on GET /exams\n| Role | Returns |\n|---|---|\n| student | Published exams only (correct answers stripped) |\n| instructor | Own exams only (drafts + published) |\n| admin | All exams from all instructors |\n\n### Delete Guard\nAn exam with any existing attempts cannot be deleted — unpublish it instead.\n",
+      "item": [
+        {
+          "name": "Get All Exams",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.exams\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.exams\"); });",
+                  "pm.test(\"Response is JSON\", () => pm.response.to.be.json);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/exams",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "exams"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "**GET /api/exams**\n\nReturns exams filtered by the caller's role (see folder description).\n\n### Test Cases\n- **TC-EXM-01:** Student token → only published exams, no correctAnswer fields\n- **TC-EXM-02:** Instructor token → own exams only (draft + published)\n- **TC-EXM-03:** Admin token → all exams",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Exam By ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.exam\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.exam\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/exams/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "exams",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**GET /api/exams/:id**\n\nReturns a single exam with all questions populated.\n\n### Role Behavior\n- **Student:** correctAnswer and explanation fields are stripped from each question\n- **Instructor:** Can only view a draft if they own it\n- **Admin:** Full access\n\n### Test Cases\n- **TC-EXM-04:** Valid examId, student token → 200, no correctAnswer in questions\n- **TC-EXM-05:** Draft exam, student token → 404 (treated as not found)\n- **TC-EXM-06:** Draft exam, instructor token (owner) → 200\n- **TC-EXM-07:** Non-existent examId → 404",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Exam",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"instructorToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"Has field: data.exam._id\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.exam._id\"); });",
+                  "const _j = pm.response.json(); if(_j && _j.data.exam._id !== undefined){ pm.collectionVariables.set(\"examId\", _j.data.exam._id); pm.environment.set(\"examId\", _j.data.exam._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/exams",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "exams"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "**POST /api/exams**\n**Role:** Instructor only\n\nCreates a new exam. Always starts as a draft (`isPublished: false`). The instructor field is set from the JWT token, never from the request body.\n\n### Request Body\n| Field | Type | Required | Notes |\n|---|---|---|---|\n| title | string | ✅ | |\n| description | string | ❌ | |\n| category | string | ❌ | |\n| duration | number | ✅ | Minutes (min: 1) |\n| totalScore | number | ✅ | Min: 1 |\n| passingScore | number | ✅ | Must be ≤ totalScore |\n| maxAttempts | number | ❌ | Default 1, min 1 |\n| shuffle | boolean | ❌ | Default false |\n\n### Test Cases\n- **TC-EXM-08:** Valid body, instructor token → 201, isPublished:false\n- **TC-EXM-09:** passingScore > totalScore → 400\n- **TC-EXM-10:** Student token → 403\n- **TC-EXM-11:** Missing title → 400",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Introduction to JavaScript\",\n  \"description\": \"Covers variables, functions, and async patterns\",\n  \"category\": \"Programming\",\n  \"duration\": 30,\n  \"totalScore\": 100,\n  \"passingScore\": 60,\n  \"maxAttempts\": 2,\n  \"shuffle\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Exam",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"instructorToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.exam\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.exam\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/exams/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "exams",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**PUT /api/exams/:id**\n**Role:** Instructor (own exam only)\n\nUpdates allowed fields on an exam. Partial updates supported — only provided fields are changed.\n\n### Updatable Fields\ntitle, description, category, duration, totalScore, passingScore, maxAttempts, shuffle\n\n### Test Cases\n- **TC-EXM-12:** Own exam, partial update → 200, updated exam returned\n- **TC-EXM-13:** Another instructor's exam → 404\n- **TC-EXM-14:** Invalid examId → 404",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated JS Exam\",\n  \"duration\": 45,\n  \"passingScore\": 70\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Toggle Publish/Unpublish",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"instructorToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.isPublished\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.isPublished\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/exams/:id/publish",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "exams",
+                ":id",
+                "publish"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**PATCH /api/exams/:id/publish**\n**Role:** Instructor (own exam only)\n\nToggles `isPublished` between true and false. When publishing, all active students receive a Socket.io push notification AND a persisted Notification document.\n\n### Success Response (200)\n```json\n{ \"status\":\"success\", \"message\":\"Exam is now published.\", \"data\":{ \"isPublished\": true } }\n```\n\n### Test Cases\n- **TC-EXM-15:** Draft exam → publishes, all students notified, isPublished:true\n- **TC-EXM-16:** Published exam → unpublishes, isPublished:false\n- **TC-EXM-17:** Another instructor's exam → 404",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Exam",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"instructorToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/exams/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "exams",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**DELETE /api/exams/:id**\n**Role:** Instructor (own exam) or Admin (any exam)\n\nDeletes an exam permanently. **Blocked if any attempts exist** — unpublish instead.\n\n### Test Cases\n- **TC-EXM-18:** Exam with 0 attempts → 200, deleted\n- **TC-EXM-19:** Exam with existing attempts → 400, \"has N attempts and cannot be deleted\"\n- **TC-EXM-20:** Another instructor's exam → 404",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "event": [],
+      "_postman_isSubFolder": true
+    },
+    {
+      "name": "4. Questions (Question Bank)",
+      "description": "## Question Routes\n**Base:** `/api/questions`\n**Auth:** Instructor token required for ALL routes.\n\n### 4 Question Types\n| type | Required Fields | Auto-graded |\n|---|---|---|\n| mcq | options[], correctAnswer (must be in options) | ✅ Sync |\n| truefalse | correctAnswer (\"True\" or \"False\") | ✅ Sync |\n| written | modelAnswer, gradingCriteria | ✅ AI (Gemini) |\n| coding | testCases[], allowedLanguages[], codeTemplate | ✅ AI (Gemini) |\n\n### Question Bank Reuse\nQuestions are stored independently. The same question can be added to multiple exams.\n`addToExam` uses `$addToSet` to prevent duplicates.\n`removeFromExam` unlinks without deleting from the bank.\n",
+      "item": [
+        {
+          "name": "Get All Questions (My Bank)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"instructorToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.questions\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.questions\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/questions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "questions"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Case-insensitive text search",
+                  "disabled": true
+                },
+                {
+                  "key": "category",
+                  "value": "",
+                  "description": "Filter by category",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "Items per page",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "**GET /api/questions**\n**Role:** Instructor only\n\nReturns all questions created by the logged-in instructor. Supports search and category filtering.\n\n### Query Parameters\n| Param | Type | Description |\n|---|---|---|\n| search | string | Case-insensitive partial match on question text |\n| category | string | Exact category match |\n| page | number | Page number (default 1) |\n| limit | number | Items per page (default 50) |\n\n### Test Cases\n- **TC-QST-01:** No filters → 200, all instructor's questions\n- **TC-QST-02:** ?search=python → only matching questions\n- **TC-QST-03:** ?category=Math → only Math questions\n- **TC-QST-04:** Student token → 403",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create MCQ Question",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"instructorToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"Has field: data.question._id\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.question._id\"); });",
+                  "const _j = pm.response.json(); if(_j && _j.data.question._id !== undefined){ pm.collectionVariables.set(\"questionId\", _j.data.question._id); pm.environment.set(\"questionId\", _j.data.question._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/questions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "questions"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "**POST /api/questions**\n**Role:** Instructor only\n\nCreates a question in the instructor's question bank.\n\n### MCQ Validation\n- `options` must have ≥ 2 items\n- `correctAnswer` must be exactly one of the strings in `options`\n\n### Test Cases\n- **TC-QST-05:** Valid MCQ → 201, question created\n- **TC-QST-06:** correctAnswer not in options → 400\n- **TC-QST-07:** MCQ with < 2 options → 400",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Which keyword declares a block-scoped variable in JavaScript?\",\n  \"type\": \"mcq\",\n  \"options\": [\n    \"var\",\n    \"let\",\n    \"const\",\n    \"function\"\n  ],\n  \"correctAnswer\": \"let\",\n  \"explanation\": \"let is block-scoped, unlike var which is function-scoped.\",\n  \"category\": \"Programming\",\n  \"difficulty\": \"easy\",\n  \"maxScore\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create True/False Question",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"instructorToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/questions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "questions"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "Create a True/False question. correctAnswer must be exactly \"True\" or \"False\".\n\n### Test Cases\n- **TC-QST-08:** correctAnswer:\"True\" → 201\n- **TC-QST-09:** correctAnswer:\"Yes\" → 400, must be True or False",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"JavaScript is a statically typed language.\",\n  \"type\": \"truefalse\",\n  \"correctAnswer\": \"False\",\n  \"explanation\": \"JavaScript is dynamically typed.\",\n  \"category\": \"Programming\",\n  \"difficulty\": \"easy\",\n  \"maxScore\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Written Question",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"instructorToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/questions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "questions"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "Create a written (open-ended) question. Graded by Gemini AI on submission.\n\n### Required Fields\n- `modelAnswer` — the ideal answer used by AI for comparison\n- `gradingCriteria` — plain English rubric passed to Gemini\n\n### Test Cases\n- **TC-QST-10:** Valid written question → 201\n- **TC-QST-11:** Missing modelAnswer → 400, \"Written questions require a modelAnswer\"",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Explain the concept of closures in JavaScript and provide an example.\",\n  \"type\": \"written\",\n  \"modelAnswer\": \"A closure is a function that retains access to its lexical scope even when executed outside that scope. Example: function counter() { let count = 0; return () => ++count; }\",\n  \"gradingCriteria\": \"Award marks for: correct definition (4pts), working code example (4pts), explanation of lexical scope (2pts)\",\n  \"category\": \"Programming\",\n  \"difficulty\": \"hard\",\n  \"maxScore\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Coding Question",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"instructorToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/questions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "questions"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "Create a coding question with test cases. Graded by Gemini AI.\n\n### Test Case Fields\n| Field | Description |\n|---|---|\n| input | Input passed to the student's function |\n| expectedOutput | Expected return value or stdout |\n| isHidden | If true, not shown to student during exam, revealed on results |\n| weight | 0–1, all weights should sum to 1.0 |\n\n### Test Cases\n- **TC-QST-12:** Valid coding question with test cases → 201\n- **TC-QST-13:** No test cases → 400, \"Coding questions require at least one test case\"",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Write a function that returns the factorial of a given number n.\",\n  \"type\": \"coding\",\n  \"codeTemplate\": \"def factorial(n):\\n    # Your code here\\n    pass\",\n  \"allowedLanguages\": [\n    \"python\",\n    \"javascript\"\n  ],\n  \"timeLimit\": 5,\n  \"memoryLimit\": 128,\n  \"testCases\": [\n    {\n      \"input\": \"5\",\n      \"expectedOutput\": \"120\",\n      \"isHidden\": false,\n      \"weight\": 0.4,\n      \"label\": \"Basic case\"\n    },\n    {\n      \"input\": \"0\",\n      \"expectedOutput\": \"1\",\n      \"isHidden\": false,\n      \"weight\": 0.3,\n      \"label\": \"Edge: zero\"\n    },\n    {\n      \"input\": \"10\",\n      \"expectedOutput\": \"3628800\",\n      \"isHidden\": true,\n      \"weight\": 0.3,\n      \"label\": \"Hidden: large\"\n    }\n  ],\n  \"category\": \"Algorithms\",\n  \"difficulty\": \"medium\",\n  \"maxScore\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Question",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"instructorToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.question\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.question\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/questions/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "questions",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**PUT /api/questions/:id**\n**Role:** Instructor (own questions only)\n\nPartial update. runValidators:true — schema validators re-run.\n\n### Test Cases\n- **TC-QST-14:** Own question → 200, updated question\n- **TC-QST-15:** Another instructor's question → 404\n- **TC-QST-16:** Invalid update (MCQ: correctAnswer not in options) → 400",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Updated question text\",\n  \"difficulty\": \"hard\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add Question to Exam",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"instructorToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/questions/add-to-exam",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "questions",
+                "add-to-exam"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "**POST /api/questions/add-to-exam**\n**Role:** Instructor only\n\nLinks an existing question to an exam using `$addToSet` — prevents duplicates.\n\n### Test Cases\n- **TC-QST-17:** Valid examId + questionId → 200\n- **TC-QST-18:** Add same question twice → 200 (idempotent, no duplicate)\n- **TC-QST-19:** Another instructor's exam → 404\n- **TC-QST-20:** Another instructor's question → 404",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"examId\": \"{{examId}}\",\n  \"questionId\": \"{{questionId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Question from Exam",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"instructorToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/questions/remove-from-exam",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "questions",
+                "remove-from-exam"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "**POST /api/questions/remove-from-exam**\n**Role:** Instructor only\n\nUnlinks the question from the exam. Does NOT delete the question from the bank.\n\n### Test Cases\n- **TC-QST-21:** Valid unlink → 200\n- **TC-QST-22:** Question not in exam → 200 (no-op, $pull is safe)",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"examId\": \"{{examId}}\",\n  \"questionId\": \"{{questionId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Question",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"instructorToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/questions/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "questions",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**DELETE /api/questions/:id**\n**Role:** Instructor (own questions only)\n\nDeletes the question permanently AND removes it from all exams and all existing student attempts (savedAnswers, perQuestionResult).\n\n### Test Cases\n- **TC-QST-23:** Own question → 200, question + all references removed\n- **TC-QST-24:** Another instructor's question → 404",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "event": [],
+      "_postman_isSubFolder": true
+    },
+    {
+      "name": "5. Attempts (Exam Taking)",
+      "description": "## Attempt Routes\n**Base:** `/api/attempts`\n**Auth:** Bearer token. Student routes require student role; violations endpoint requires instructor/admin.\n\n### Attempt Status State Machine\n`in-progress` → `submitted` (normal) | `timed-out` (timer expired) | `auto-submitted` (3 violations) | `abandoned`\n\n### Key Behaviors\n- **Resume-on-refresh:** Start returns existing in-progress attempt instead of creating a duplicate\n- **Auto-save:** Every answer selection calls PATCH /save-answer — survives browser crashes\n- **Max Attempts:** Only submitted/timed-out/auto-submitted count. Abandoned does not count.\n- **Auto-submit on 3rd violation:** Grading runs server-side at that moment\n",
+      "item": [
+        {
+          "name": "Start Exam (or Resume)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"Has field: data.attempt._id\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.attempt._id\"); });",
+                  "const _j = pm.response.json(); if(_j && _j.data.attempt._id !== undefined){ pm.collectionVariables.set(\"attemptId\", _j.data.attempt._id); pm.environment.set(\"attemptId\", _j.data.attempt._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/attempts/start",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attempts",
+                "start"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "**POST /api/attempts/start**\n**Role:** Student only\n\nStarts a new attempt or resumes an existing in-progress one. Questions are shuffled (Fisher-Yates) if `exam.shuffle:true`.\n\n### Response fields\n| Field | Description |\n|---|---|\n| resumed | true if returning an existing attempt |\n| data.attempt | The full attempt with questions[] populated |\n| data.attempt.exam | Title, duration, totalScore, passingScore |\n\n### Test Cases\n- **TC-ATT-01:** Published exam → 201, new attempt, resumed:false\n- **TC-ATT-02:** Same student, same exam (refresh) → 200, same attemptId, resumed:true\n- **TC-ATT-03:** Max attempts reached → 403, \"used all allowed attempts\"\n- **TC-ATT-04:** Unpublished exam → 404\n- **TC-ATT-05:** Non-existent examId → 404",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"examId\": \"{{examId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Save Answer (Auto-save)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/attempts/:id/save-answer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attempts",
+                ":id",
+                "save-answer"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**PATCH /api/attempts/:id/save-answer**\n**Role:** Student only (own in-progress attempt)\n\nUpserts a single answer in `savedAnswers[]`. Called on every answer selection — no manual save needed.\n\n### For MCQ / TF\n`{ questionId, answer: \"selected option text\" }`\n\n### For Written\n`{ questionId, answer: \"the student's written response\" }`\n\n### For Coding\n`{ questionId, codeAnswer: \"def factorial(n): ...\", language: \"python\" }`\n\n### Test Cases\n- **TC-ATT-06:** First answer for a question → pushed to savedAnswers\n- **TC-ATT-07:** Second answer for same question → updated in place (no duplicate)\n- **TC-ATT-08:** Missing questionId → 400\n- **TC-ATT-09:** Already submitted attempt → 404 (no longer in-progress)",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"questionId\": \"{{questionId}}\",\n  \"answer\": \"let\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Save Coding Answer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/attempts/:id/save-answer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attempts",
+                ":id",
+                "save-answer"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "Save a coding answer. Uses codeAnswer and language fields instead of answer.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"questionId\": \"{{questionId}}\",\n  \"codeAnswer\": \"def factorial(n):\\n    if n == 0: return 1\\n    return n * factorial(n-1)\",\n  \"language\": \"python\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Exam",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.score\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.score\"); });",
+                  "pm.test(\"Has field: data.passed\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.passed\"); });",
+                  "const _j = pm.response.json(); if(_j && _j.data.certificateId !== undefined){ pm.collectionVariables.set(\"certId\", _j.data.certificateId); pm.environment.set(\"certId\", _j.data.certificateId); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/attempts/:id/submit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attempts",
+                ":id",
+                "submit"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**POST /api/attempts/:id/submit**\n**Role:** Student only (own in-progress attempt)\n\nGrades the exam server-side and closes the attempt. Triggers: certificate creation (if passed), Socket.io notification.\n\n### Grading Logic\n- **MCQ/TF:** Exact string match. Score = (correct / objectiveCount) × objectivePortion\n- **Written/Coding:** AI grades asynchronously at submit time. Score updates as each question finishes.\n\n### timedOut field\n- Set `timedOut: true` when the frontend countdown reaches zero\n- Server also forces `timed-out` status if `timeTaken > exam.duration × 60 + 60s`\n\n### Success Response (200)\n```json\n{ \"status\":\"success\", \"data\": { \"attemptId\":\"...\", \"score\":75, \"passed\":true, \"timeTaken\":1200, \"correctCount\":3, \"totalQuestions\":5, \"certificateId\":\"...\" } }\n```\n\n### Test Cases\n- **TC-ATT-10:** All correct → score = totalScore, passed:true, certificateId returned\n- **TC-ATT-11:** Score < passingScore → passed:false, certificateId:null\n- **TC-ATT-12:** timedOut:true → status:\"timed-out\"\n- **TC-ATT-13:** Submit past deadline (60s grace) → forced timed-out\n- **TC-ATT-14:** Already submitted → 404",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"timedOut\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Attempt Result",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.attempt\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.attempt\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/attempts/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attempts",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**GET /api/attempts/:id**\n**Role:** Student (own attempt only)\n\nReturns the full attempt with per-question breakdown. Questions are populated with text, options, correctAnswer, explanation.\n\n### Test Cases\n- **TC-ATT-15:** Submitted attempt → 200, full perQuestionResult\n- **TC-ATT-16:** In-progress attempt → 200 (no score yet)\n- **TC-ATT-17:** Another student's attempt → 404",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Attempt History",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.attempts\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.attempts\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/attempts/history",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attempts",
+                "history"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number",
+                  "disabled": false
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Items per page",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "**GET /api/attempts/history**\n**Role:** Student only\n\nReturns all completed (submitted/timed-out/auto-submitted) attempts for the student. Paginated.\n\n### Query Parameters\n| Param | Default | Description |\n|---|---|---|\n| page | 1 | Page number |\n| limit | 10 | Items per page |\n\n### Test Cases\n- **TC-ATT-18:** Student with attempts → 200, paginated list\n- **TC-ATT-19:** Student with no attempts → 200, empty array",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Log Cheat Event",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: autoSubmitted\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"autoSubmitted\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/attempts/:id/cheat-event",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attempts",
+                ":id",
+                "cheat-event"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**POST /api/attempts/:id/cheat-event**\n**Role:** Student only (own in-progress attempt)\n\nCalled by the frontend anti-cheat hook when a violation is detected. At the 3rd violation, the attempt is automatically graded and closed (auto-submitted).\n\n### Valid eventType values\n`tab-switch` | `fullscreen-exit` | `copy` | `paste` | `right-click`\n\n### Response (under threshold)\n```json\n{ \"autoSubmitted\":false, \"violationCount\":1, \"violationsLeft\":2, \"maxViolations\":3 }\n```\n\n### Response (threshold reached — 3rd violation)\n```json\n{ \"autoSubmitted\":true, \"data\": { \"attemptId\":\"...\", \"score\":40, \"passed\":false } }\n```\n\n### Test Cases\n- **TC-CHT-01:** 1st violation → 200, autoSubmitted:false, violationsLeft:2\n- **TC-CHT-02:** 3rd violation → 200, autoSubmitted:true, attempt graded and closed\n- **TC-CHT-03:** Invalid eventType → 400, \"Invalid event type\"\n- **TC-CHT-04:** Already submitted attempt → 404\n- **TC-CHT-05:** Attempt owned by another student → 404",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventType\": \"tab-switch\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Violations (Instructor)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"instructorToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.violations\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.violations\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/attempts/:id/violations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attempts",
+                ":id",
+                "violations"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**GET /api/attempts/:id/violations**\n**Role:** Instructor or Admin\n\nReturns all CheatLog documents for the attempt in chronological order.\n\n### Test Cases\n- **TC-CHT-06:** Attempt with violations → 200, logs sorted by detectedAt ASC\n- **TC-CHT-07:** Instructor viewing another instructor's exam attempt → 403\n- **TC-CHT-08:** Non-existent attemptId → 404",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Abandon Attempt",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/attempts/:id/abandon",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attempts",
+                ":id",
+                "abandon"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**POST /api/attempts/:id/abandon**\n**Role:** Student only (own in-progress attempt)\n\nSets attempt status to \"abandoned\". Abandoned attempts do NOT count toward maxAttempts.\n\n### Test Cases\n- **TC-ATT-20:** In-progress attempt → 200, status:abandoned\n- **TC-ATT-21:** Already submitted → 404",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "event": [],
+      "_postman_isSubFolder": true
+    },
+    {
+      "name": "6. Results",
+      "description": "## Result Routes\n**Base:** `/api/results`\n**Auth:** Bearer token required for all routes.\n\nStudent routes access own results only.\nInstructor/Admin routes access all attempts for an exam.\n",
+      "item": [
+        {
+          "name": "Get My Result",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.attempt\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.attempt\"); });",
+                  "pm.test(\"Has field: data.summary\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.summary\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/results/:attemptId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "results",
+                ":attemptId"
+              ],
+              "variable": [
+                {
+                  "key": "attemptId",
+                  "value": "{{attemptId}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**GET /api/results/:attemptId**\n**Role:** Student (own attempt only)\n\nReturns attempt with populated perQuestionResult (question text, options, correctAnswer, explanation visible post-submission).\n\n### Response includes summary object\n```json\n\"summary\": { \"score\":75, \"totalScore\":100, \"passed\":true, \"timeTaken\":900, \"correctCount\":3, \"wrongCount\":1, \"skippedCount\":1, \"totalQuestions\":5, \"percentage\":75 }\n```\n\n### Test Cases\n- **TC-RES-01:** Own submitted attempt → 200, summary + perQuestionResult\n- **TC-RES-02:** In-progress attempt → 400, \"still in progress\"\n- **TC-RES-03:** Another student's attempt → 404",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get My History",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.attempts\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.attempts\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/results/my-history",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "results",
+                "my-history"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "**GET /api/results/my-history**\n**Role:** Student only\n\nReturns all non-in-progress attempts for the student, sorted newest first.\n\n### Test Cases\n- **TC-RES-04:** Student with history → 200, array of attempts\n- **TC-RES-05:** Student with no history → 200, empty array",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Exam Attempts (Instructor)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"instructorToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.attempts\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.attempts\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/results/exam/:examId/attempts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "results",
+                "exam",
+                ":examId",
+                "attempts"
+              ],
+              "variable": [
+                {
+                  "key": "examId",
+                  "value": "{{examId}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**GET /api/results/exam/:examId/attempts**\n**Role:** Instructor (own exam) or Admin\n\nReturns all finished attempts for an exam, sorted by score DESC, timeTaken ASC.\n\n### Test Cases\n- **TC-RES-06:** Own exam → 200, all attempts with student info\n- **TC-RES-07:** Another instructor's exam → 403\n- **TC-RES-08:** Non-existent examId → 404",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Attempt Detail (Instructor)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"instructorToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.attempt\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.attempt\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/results/attempt/:attemptId/detail",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "results",
+                "attempt",
+                ":attemptId",
+                "detail"
+              ],
+              "variable": [
+                {
+                  "key": "attemptId",
+                  "value": "{{attemptId}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**GET /api/results/attempt/:attemptId/detail**\n**Role:** Instructor or Admin\n\nFull per-question breakdown for any student's attempt. Populates: student info, exam info, all question details including correctAnswer.\n\n### Test Cases\n- **TC-RES-09:** Valid attemptId → 200, full detail with student + exam info\n- **TC-RES-10:** Non-existent attemptId → 404",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Export Results as CSV",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"instructorToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Content-Type is CSV\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"text/csv\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/results/exam/:examId/export-csv",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "results",
+                "exam",
+                ":examId",
+                "export-csv"
+              ],
+              "variable": [
+                {
+                  "key": "examId",
+                  "value": "{{examId}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**GET /api/results/exam/:examId/export-csv**\n**Role:** Instructor (own exam) or Admin\n\nStreams a CSV file. Set Postman to \"Send and Download\" to save the file.\n\n### CSV Columns\nName, Email, Score, Total, Passed, Time (sec), Attempt #, Status, Submitted At\n\n### Test Cases\n- **TC-RES-11:** Own exam with attempts → Content-Type:text/csv, CSV streamed\n- **TC-RES-12:** Own exam with no attempts → Empty CSV (header only)\n- **TC-RES-13:** Another instructor's exam → 403",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Export Results as PDF",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"instructorToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Content-Type is PDF\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/pdf\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/results/exam/:examId/export-pdf",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "results",
+                "exam",
+                ":examId",
+                "export-pdf"
+              ],
+              "variable": [
+                {
+                  "key": "examId",
+                  "value": "{{examId}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**GET /api/results/exam/:examId/export-pdf**\n**Role:** Instructor (own exam) or Admin\n\nStreams a branded A4 PDF with summary stats and a sorted attempt table. Set Postman to \"Send and Download\".\n\n### Test Cases\n- **TC-RES-14:** Own exam → 200, Content-Type:application/pdf\n- **TC-RES-15:** Another instructor's exam → 403",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "event": [],
+      "_postman_isSubFolder": true
+    },
+    {
+      "name": "7. Leaderboard & Statistics",
+      "description": "## Leaderboard Routes\n**Base:** `/api/leaderboard`\n**Auth:** Bearer token required.\n\n### Leaderboard Algorithm\n- Only PASSING attempts are ranked\n- Per student: only their BEST score is counted (MongoDB aggregation groups by student)\n- Tie-breaking: highest score wins; fastest time wins ties\n- Limited to top 50 entries\n- Response includes `currentUser` entry flagging the caller's rank even if outside top 50\n",
+      "item": [
+        {
+          "name": "Get Exam Leaderboard",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.leaderboard\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.leaderboard\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/leaderboard/:examId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "leaderboard",
+                ":examId"
+              ],
+              "variable": [
+                {
+                  "key": "examId",
+                  "value": "{{examId}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**GET /api/leaderboard/:examId**\n**Role:** Any authenticated user\n\nReturns ranked leaderboard for a specific exam (passing attempts only, best score per student).\n\n### Test Cases\n- **TC-LDR-01:** Exam with passing attempts → 200, ranked array, each with rank/name/score/timeTaken\n- **TC-LDR-02:** Student's rank flagged with isCurrentUser:true\n- **TC-LDR-03:** Exam with no passing attempts → 200, empty leaderboard array\n- **TC-LDR-04:** Non-existent examId → 404",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Exam Statistics (Instructor)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"instructorToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.totalAttempts\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.totalAttempts\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/leaderboard/:examId/stats",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "leaderboard",
+                ":examId",
+                "stats"
+              ],
+              "variable": [
+                {
+                  "key": "examId",
+                  "value": "{{examId}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**GET /api/leaderboard/:examId/stats**\n**Role:** Instructor (own exam) or Admin\n\nReturns aggregate statistics for an exam: pass rate, average score, average time, and per-question difficulty (correct rate per question).\n\n### Response\n```json\n{\n  \"totalAttempts\":50, \"passRate\":72, \"avgScore\":74, \"avgTime\":1100,\n  \"passedCount\":36, \"failedCount\":14,\n  \"questionStats\": [ { \"questionId\":\"...\", \"text\":\"...\", \"correctRate\":88, \"totalAnswered\":50 } ]\n}\n```\n\n### Test Cases\n- **TC-LDR-05:** Own exam with attempts → 200, stats object\n- **TC-LDR-06:** Own exam with no attempts → 200, all zeros\n- **TC-LDR-07:** Another instructor's exam → 403",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Admin Overview",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"adminToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.totalUsers\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.totalUsers\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/leaderboard/admin/overview",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "leaderboard",
+                "admin",
+                "overview"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "**GET /api/leaderboard/admin/overview**\n**Role:** Admin only\n\nPlatform-wide aggregate counters and recent activity feed.\n\n### Response\n```json\n{ \"totalUsers\":120, \"totalExams\":45, \"totalAttempts\":890, \"totalCerts\":312, \"recentAttempts\": [...] }\n```\n\n### Test Cases\n- **TC-LDR-08:** Admin token → 200, platform counters + last 10 attempts\n- **TC-LDR-09:** Non-admin token → 403",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "event": [],
+      "_postman_isSubFolder": true
+    },
+    {
+      "name": "8. Certificates",
+      "description": "## Certificate Routes\n**Base:** `/api/certificates`\n\nCertificates are auto-created by the submit flow when `score >= passingScore`.\nEach certificate has a UUID v4 `certId` string stored as a plain field for public verification.\nMongoDB unique constraint on `attempt` prevents duplicate certificates for the same submission.\n",
+      "item": [
+        {
+          "name": "Verify Certificate (Public)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.valid\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.valid\"); });",
+                  "pm.test(\"Has field: data.certificate\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.certificate\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/certificates/verify/:certId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "certificates",
+                "verify",
+                ":certId"
+              ],
+              "variable": [
+                {
+                  "key": "certId",
+                  "value": "{{certId}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**GET /api/certificates/verify/:certId**\n**Role:** PUBLIC — no authentication required\n\nVerifies a certificate by its UUID certId. Anyone with the certId can verify.\n\n### Success Response (200)\n```json\n{ \"status\":\"success\", \"message\":\"Certificate is valid.\", \"data\": { \"valid\":true, \"certificate\": { \"certId\":\"...\", \"student\":{\"name\":\"...\",\"email\":\"...\"}, \"exam\":{\"title\":\"...\",\"instructor\":{\"name\":\"...\"}}, \"score\":85, \"issuedAt\":\"...\" } } }\n```\n\n### Not Found Response (404)\n```json\n{ \"status\":\"fail\", \"data\": { \"valid\":false } }\n```\n\n### Test Cases\n- **TC-CERT-01:** Valid certId (no token) → 200, valid:true, student+exam info\n- **TC-CERT-02:** Invalid/fake certId → 404, valid:false\n- **TC-CERT-03:** Revoked/deleted certId → 404",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Certificates",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.certificates\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.certificates\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/certificates/mine",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "certificates",
+                "mine"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "**GET /api/certificates/mine**\n**Role:** Student only\n\nReturns all certificates earned by the logged-in student, sorted by issuedAt DESC.\n\n### Test Cases\n- **TC-CERT-04:** Student with certificates → 200, array with exam + student info\n- **TC-CERT-05:** Student with no certificates → 200, empty array\n- **TC-CERT-06:** Instructor token → 403",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Certificate By ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.certificate\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.certificate\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/certificates/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "certificates",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**GET /api/certificates/:id**\n**Role:** Certificate owner (student) or Admin\n\nFetch a certificate by its MongoDB _id (not the UUID certId). Used for the certificate download page.\n\n### Test Cases\n- **TC-CERT-07:** Own certificate → 200, full certificate details\n- **TC-CERT-08:** Another student's certificate → 403, \"Not authorized\"\n- **TC-CERT-09:** Admin token → 200 (admin sees any)\n- **TC-CERT-10:** Non-existent ID → 404",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "event": [],
+      "_postman_isSubFolder": true
+    },
+    {
+      "name": "9. Notifications",
+      "description": "## Notification Routes\n**Base:** `/api/notifications`\n**Auth:** Bearer token required. All routes are scoped to the logged-in user.\n\n### Notification Types\n| Type | Triggered By |\n|---|---|\n| result | Exam submission |\n| certificate | Passing exam |\n| new-exam | Instructor publishes exam |\n| system | Manual/admin broadcasts |\n| ai-performance | AI performance analysis generated |\n| plagiarism-alert | Plagiarism scan found flagged pairs |\n| cheat-verdict | AI cheat analysis produced high-risk verdict |\n\n### Real-time Delivery\nEvery notification is BOTH persisted to MongoDB AND pushed via Socket.io event `notification:new` to all active sockets for that user.\n",
+      "item": [
+        {
+          "name": "Get My Notifications",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.notifications\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.notifications\"); });",
+                  "pm.test(\"Has field: unreadCount\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"unreadCount\"); });",
+                  "const _j = pm.response.json(); if(_j.data.notifications.length > 0){ pm.collectionVariables.set(\"notifId\", _j.data.notifications[0]._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/notifications",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "unread",
+                  "value": "true",
+                  "description": "Filter unread only",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "**GET /api/notifications**\n**Role:** Any authenticated user\n\nReturns up to 50 notifications for the logged-in user, sorted newest first. Includes total unread count.\n\n### Query Parameters\n| Param | Value | Description |\n|---|---|---|\n| unread | true | Return only unread notifications |\n\n### Response\n```json\n{ \"unreadCount\": 3, \"results\": 15, \"data\": { \"notifications\": [...] } }\n```\n\n### Test Cases\n- **TC-NOT-01:** User with notifications → 200, array + unreadCount\n- **TC-NOT-02:** ?unread=true → only unread notifications\n- **TC-NOT-03:** User with no notifications → 200, empty array, unreadCount:0",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mark One Notification Read",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.notification\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.notification\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/notifications/:id/read",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                ":id",
+                "read"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**PATCH /api/notifications/:id/read**\n**Role:** Any authenticated user (own notifications only)\n\nSets `read: true` on a specific notification.\n\n### Test Cases\n- **TC-NOT-04:** Own unread notification → 200, notification with read:true\n- **TC-NOT-05:** Own already-read notification → 200 (idempotent)\n- **TC-NOT-06:** Another user's notification → 404 (scoped by user)\n- **TC-NOT-07:** Non-existent ID → 404",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mark All Notifications Read",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/notifications/read-all",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                "read-all"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "**PATCH /api/notifications/read-all**\n**Role:** Any authenticated user\n\nBulk-updates all unread notifications for the user to read:true.\n\n### Test Cases\n- **TC-NOT-08:** User with unread notifications → 200, all marked read\n- **TC-NOT-09:** User with no unread → 200 (no-op)",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Notification",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/notifications/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**DELETE /api/notifications/:id**\n**Role:** Any authenticated user (own notifications only)\n\nPermanently deletes a single notification.\n\n### Test Cases\n- **TC-NOT-10:** Own notification → 200, deleted\n- **TC-NOT-11:** Another user's notification → 200 (findOneAndDelete with user filter — safe no-op)\n- **TC-NOT-12:** Non-existent ID → 200 (no-op, not an error)",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "event": [],
+      "_postman_isSubFolder": true
+    },
+    {
+      "name": "10. Admin",
+      "description": "## Admin Routes\n**Base:** `/api/admin`\n**Auth:** Admin token required for ALL routes.\n\n### Delete Guards\n- Cannot delete your own account\n- Cannot change your own role\n- Cannot remove the last admin (role change guard)\n- Cannot delete an exam that has existing attempts\n",
+      "item": [
+        {
+          "name": "Get All Users",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"adminToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.users\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.users\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "users"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "**GET /api/admin/users**\n**Role:** Admin only\n\nReturns all users across all roles, sorted by createdAt DESC.\n\n### Test Cases\n- **TC-ADM-01:** Admin token → 200, all users array\n- **TC-ADM-02:** Non-admin token → 403",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update User Role",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"adminToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.user\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.user\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/users/:id/role",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "users",
+                ":id",
+                "role"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**PATCH /api/admin/users/:id/role**\n**Role:** Admin only\n\nChanges a user's role. Valid values: \"student\", \"instructor\", \"admin\".\n\n### Guards\n- Cannot change own role\n- Cannot remove the last admin from admin role\n\n### Test Cases\n- **TC-ADM-03:** Valid role change → 200, updated user\n- **TC-ADM-04:** Invalid role value → 400, \"Invalid role\"\n- **TC-ADM-05:** Change own role → 400, \"You cannot change your own role\"\n- **TC-ADM-06:** Remove last admin → 400, \"Cannot remove the last admin\"\n- **TC-ADM-07:** Non-existent userId → 404",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"instructor\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Toggle User Active/Disabled",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"adminToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.isActive\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.isActive\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/users/:id/toggle-active",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "users",
+                ":id",
+                "toggle-active"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**PATCH /api/admin/users/:id/toggle-active**\n**Role:** Admin only\n\nFlips `isActive`. When a user is deactivated, the protect middleware rejects their existing JWT on their next request — instant mid-session lockout.\n\n### Test Cases\n- **TC-ADM-08:** Active user → 200, isActive:false (disabled)\n- **TC-ADM-09:** Disabled user → 200, isActive:true (re-enabled)\n- **TC-ADM-10:** Non-existent userId → 404",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete User",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"adminToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/users/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**DELETE /api/admin/users/:id**\n**Role:** Admin only\n\nPermanently deletes a user account.\n\n### Test Cases\n- **TC-ADM-11:** Valid userId → 200, \"User deleted\"\n- **TC-ADM-12:** Own account → 400, \"You cannot delete your own account\"\n- **TC-ADM-13:** Non-existent userId → 404",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Exams (Admin)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"adminToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.exams\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.exams\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/exams",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "exams"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "**GET /api/admin/exams**\n**Role:** Admin only\n\nReturns ALL exams from ALL instructors with instructor info populated.\n\n### Test Cases\n- **TC-ADM-14:** Admin token → 200, all exams with instructor name/email\n- **TC-ADM-15:** Non-admin token → 403",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Exam (Admin Override)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"adminToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/exams/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "exams",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**DELETE /api/admin/exams/:id**\n**Role:** Admin only\n\nAdmin can delete any exam. Blocked if attempts exist.\n\n### Test Cases\n- **TC-ADM-16:** Exam with 0 attempts → 200, deleted\n- **TC-ADM-17:** Exam with existing attempts → 400, \"has N attempts and cannot be deleted\"\n- **TC-ADM-18:** Non-existent examId → 404",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "event": [],
+      "_postman_isSubFolder": true
+    },
+    {
+      "name": "11. AI (Gemini 2.5 Flash)",
+      "description": "## AI Routes\n**Base:** `/api/ai`\n**Auth:** Bearer token required for all routes. Role requirements vary per endpoint.\n\n### AI Engine\nAll AI calls route through `geminiService.js` which provides:\n- Multi-key rotation (`GEMINI_API_KEY` + `GEMINI_API_KEYS`)\n- Auto-retry with backoff (3 retries)\n- Model fallback: gemini-2.5-flash → gemini-1.5-flash on quota exhaustion\n\n### Persistence\nAI results are stored in the `AiAnalysis` collection (type: \"performance\" or \"cheat\") and back-referenced from the Attempt document (`performanceAnalysis` and `cheatAnalysis` fields).\nPlagiarism results are stored in the `PlagiarismReport` collection.\nChat history is stored per (student, exam) in `ChatMessage`.\n",
+      "item": [
+        {
+          "name": "AI Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: services.gemini\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"services.gemini\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai",
+                "health"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "**GET /api/ai/health**\n**Role:** Any authenticated user\n\nChecks if the Gemini API is reachable and returns the active model name.\n\n### Test Cases\n- **TC-AI-01:** Gemini available → 200, { services: { gemini: { available:true, model:\"gemini-2.5-flash\" } } }\n- **TC-AI-02:** All API keys exhausted → 200, available:false",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Grade Single Written Answer",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"instructorToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.result\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.result\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai/grade-written/:attemptId/:questionId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai",
+                "grade-written",
+                ":attemptId",
+                ":questionId"
+              ],
+              "variable": [
+                {
+                  "key": "attemptId",
+                  "value": "{{attemptId}}",
+                  "description": ""
+                },
+                {
+                  "key": "questionId",
+                  "value": "{{questionId}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**POST /api/ai/grade-written/:attemptId/:questionId**\n**Role:** Instructor or Admin\n\nAI-grades one written answer from a submitted attempt against the question's modelAnswer and gradingCriteria.\n\n### What It Does\n1. Finds the submitted attempt (must be submitted/timed-out/auto-submitted)\n2. Finds the written question\n3. Retrieves the student's saved answer\n4. Calls Gemini with the question text, model answer, criteria, and student answer\n5. Updates `perQuestionResult[]` entry with score, feedback, strengths, weaknesses, aiGraded:true\n\n### Test Cases\n- **TC-AI-03:** Valid attempt + written question → 200, score/feedback returned\n- **TC-AI-04:** Question not written type → 400\n- **TC-AI-05:** Non-submitted attempt → 404\n- **TC-AI-06:** Gemini unavailable → 503",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Grade All Written Answers (Batch)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"instructorToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai/grade-all-written/:attemptId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai",
+                "grade-all-written",
+                ":attemptId"
+              ],
+              "variable": [
+                {
+                  "key": "attemptId",
+                  "value": "{{attemptId}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**POST /api/ai/grade-all-written/:attemptId**\n**Role:** Instructor or Admin\n\nBatch-grades all ungraded written answers in a single attempt sequentially to avoid rate limiting.\n\n### Test Cases\n- **TC-AI-07:** Attempt with multiple written questions → 200, all graded\n- **TC-AI-08:** Attempt with no written questions → 200, graceful no-op\n- **TC-AI-09:** Non-submitted attempt → 404",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Run Code Sandbox",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai/run-code",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai",
+                "run-code"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "**POST /api/ai/run-code**\n**Role:** Any authenticated user\n\nExecutes code against no test cases — just runs it and returns stdout/stderr. Used for the \"Run\" button in the code editor before submitting.\n\n### Test Cases\n- **TC-AI-10:** Valid Python code → 200, output returned\n- **TC-AI-11:** Code with syntax error → 200, error in output\n- **TC-AI-12:** Unsupported language → 400",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"print(\\\"Hello, World!\\\")\",\n  \"language\": \"python\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Code Answer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.result\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.result\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai/submit-code/:attemptId/:questionId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai",
+                "submit-code",
+                ":attemptId",
+                ":questionId"
+              ],
+              "variable": [
+                {
+                  "key": "attemptId",
+                  "value": "{{attemptId}}",
+                  "description": ""
+                },
+                {
+                  "key": "questionId",
+                  "value": "{{questionId}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**POST /api/ai/submit-code/:attemptId/:questionId**\n**Role:** Student only\n\nGrades a code submission against the question's test cases using Gemini. Updates perQuestionResult with testResults[], codeReview, score, and aiGraded:true.\n\n### Test Cases\n- **TC-AI-13:** Passing code → 200, testResults with passed:true, high score\n- **TC-AI-14:** Failing code → 200, testResults with passed:false, low score\n- **TC-AI-15:** Non-coding question → 400\n- **TC-AI-16:** Non-student token → 403",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceCode\": \"def factorial(n):\\n    if n==0: return 1\\n    return n*factorial(n-1)\",\n  \"language\": \"python\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "AI Tutor — Send Message",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.reply\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.reply\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai/tutor/chat",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai",
+                "tutor",
+                "chat"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "**POST /api/ai/tutor/chat**\n**Role:** Student only\n\nSends a message to the AI Tutor for a specific exam. The full exam context (questions + student's attempt result) is injected into the Gemini system prompt.\n\n### How Context is Built\n- Exam title, all questions with their correct answers\n- Student's attempt: per-question results (correct/wrong, answers)\n- Full conversation history from ChatMessage collection\n\n### Response\n```json\n{ \"status\":\"success\", \"data\": { \"reply\": \"The closure question tested your understanding of...\" } }\n```\n\n### Test Cases\n- **TC-AI-17:** Valid examId + message → 200, contextual AI reply\n- **TC-AI-18:** ExamId without completed attempt → 200, generic guidance\n- **TC-AI-19:** Non-student token → 403",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"examId\": \"{{examId}}\",\n  \"message\": \"Why did I get the closure question wrong?\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "AI Tutor — Get History",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai/tutor/history/:examId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai",
+                "tutor",
+                "history",
+                ":examId"
+              ],
+              "variable": [
+                {
+                  "key": "examId",
+                  "value": "{{examId}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**GET /api/ai/tutor/history/:examId**\n**Role:** Student only\n\nReturns all ChatMessage documents for the student + exam pair, sorted chronologically.\n\n### Test Cases\n- **TC-AI-20:** After chat → 200, array of {role:\"user\"|\"assistant\", content, createdAt}\n- **TC-AI-21:** No chat history → 200, empty array",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "AI Tutor — Clear History",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai/tutor/history/:examId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai",
+                "tutor",
+                "history",
+                ":examId"
+              ],
+              "variable": [
+                {
+                  "key": "examId",
+                  "value": "{{examId}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**DELETE /api/ai/tutor/history/:examId**\n**Role:** Student only\n\nDeletes all chat messages for the student + exam pair.\n\n### Test Cases\n- **TC-AI-22:** Existing history → 200, messages deleted\n- **TC-AI-23:** No history → 200 (no-op)",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Generate AI Questions",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"instructorToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.questions\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.questions\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai/generate-questions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai",
+                "generate-questions"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "**POST /api/ai/generate-questions**\n**Role:** Instructor or Admin\n\nGenerates a set of questions from a topic prompt using Gemini. Returns a JSON array for the instructor to review — nothing is saved to the DB yet.\n\n### Gemini Output Shape (per question)\n```json\n{ \"text\":\"...\", \"type\":\"mcq\", \"options\":[\"A\",\"B\",\"C\",\"D\"], \"correctAnswer\":\"B\", \"explanation\":\"...\", \"difficulty\":\"medium\", \"category\":\"Programming\" }\n```\n\n### Test Cases\n- **TC-AI-24:** Valid topic + count:5 → 200, array of 5 question objects\n- **TC-AI-25:** count:0 → 400 (validation)\n- **TC-AI-26:** Gemini fails → 503 with error message",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"topic\": \"Python data structures\",\n  \"count\": 5,\n  \"difficulty\": \"medium\",\n  \"types\": [\n    \"mcq\",\n    \"truefalse\"\n  ],\n  \"category\": \"Programming\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Save AI-Generated Questions",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"instructorToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai/save-questions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai",
+                "save-questions"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "**POST /api/ai/save-questions**\n**Role:** Instructor or Admin\n\nSaves selected AI-generated questions to the instructor's question bank. Marks each with `aiGenerated: true`.\n\n### Test Cases\n- **TC-AI-27:** Valid questions array → 201, saved questions with IDs\n- **TC-AI-28:** Empty array → 400\n- **TC-AI-29:** Student token → 403",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"questions\": [\n    {\n      \"text\": \"What is a Python list?\",\n      \"type\": \"mcq\",\n      \"options\": [\n        \"Mutable sequence\",\n        \"Immutable sequence\",\n        \"Key-value store\",\n        \"Set\"\n      ],\n      \"correctAnswer\": \"Mutable sequence\",\n      \"explanation\": \"Lists are mutable ordered sequences.\",\n      \"category\": \"Programming\",\n      \"difficulty\": \"easy\",\n      \"maxScore\": 10\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Run Cheat Analysis",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"instructorToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.analysis\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.analysis\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai/analyze-cheat/:attemptId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai",
+                "analyze-cheat",
+                ":attemptId"
+              ],
+              "variable": [
+                {
+                  "key": "attemptId",
+                  "value": "{{attemptId}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**POST /api/ai/analyze-cheat/:attemptId**\n**Role:** Instructor or Admin\n\nSends the attempt's CheatLog documents to Gemini for behavioral analysis. Returns a risk score (0–100), evidence bullets, and an instructor recommendation.\n\n### Gemini Output\n`{ \"riskScore\":75, \"explanation\":\"...\", \"evidence\":[\"Tab switched 5 times in first 3 minutes\", \"Fullscreen exited immediately before submitting\"], \"recommendation\":\"Flag for investigation\" }`\n\n### Test Cases\n- **TC-AI-30:** Attempt with violations → 200, riskScore/evidence/recommendation\n- **TC-AI-31:** Attempt with 0 violations → 200, riskScore:0, \"No violations detected\"\n- **TC-AI-32:** Non-existent attemptId → 404",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Cheat Analysis",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"instructorToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai/analyze-cheat/:attemptId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai",
+                "analyze-cheat",
+                ":attemptId"
+              ],
+              "variable": [
+                {
+                  "key": "attemptId",
+                  "value": "{{attemptId}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**GET /api/ai/analyze-cheat/:attemptId**\n**Role:** Instructor or Admin\n\nRetrieves a previously generated cheat analysis from AiAnalysis collection.\n\n### Test Cases\n- **TC-AI-33:** Analysis exists → 200, analysis object\n- **TC-AI-34:** No analysis generated yet → 404",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Run Performance Analysis",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.analysis\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.analysis\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai/analyze-performance/:attemptId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai",
+                "analyze-performance",
+                ":attemptId"
+              ],
+              "variable": [
+                {
+                  "key": "attemptId",
+                  "value": "{{attemptId}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**POST /api/ai/analyze-performance/:attemptId**\n**Role:** Any authenticated user (students see own, instructors see any)\n\nGenerates a personalized performance report using Gemini. Analyzes per-question results, time taken, wrong answers, and AI-graded question feedback.\n\n### Gemini Output\n`{ \"summary\":\"...\", \"strengths\":[\"Strong on loops\",\"Good at debugging\"], \"weaknesses\":[\"Closures need work\",\"OOP concepts unclear\"], \"recommendations\":[\"Review MDN closures article\",\"Practice LeetCode OOP problems\"], \"readinessScore\":65 }`\n\n### Test Cases\n- **TC-AI-35:** Own submitted attempt → 200, summary/strengths/weaknesses/readinessScore\n- **TC-AI-36:** In-progress attempt → 400\n- **TC-AI-37:** Another student's attempt (instructor) → 200",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Performance Analysis",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai/analyze-performance/:attemptId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai",
+                "analyze-performance",
+                ":attemptId"
+              ],
+              "variable": [
+                {
+                  "key": "attemptId",
+                  "value": "{{attemptId}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**GET /api/ai/analyze-performance/:attemptId**\n**Role:** Any authenticated user\n\nRetrieves a previously generated performance analysis.\n\n### Test Cases\n- **TC-AI-38:** Analysis exists → 200\n- **TC-AI-39:** No analysis yet → 404",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Run Plagiarism Detection",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"instructorToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has field: data.flaggedCount\", () => { const j = pm.response.json(); pm.expect(j).to.have.nested.property(\"data.flaggedCount\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai/plagiarism/:examId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai",
+                "plagiarism",
+                ":examId"
+              ],
+              "variable": [
+                {
+                  "key": "examId",
+                  "value": "{{examId}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**POST /api/ai/plagiarism/:examId**\n**Role:** Instructor or Admin\n\nRuns cross-student plagiarism detection for all written answers in an exam.\n\n### Algorithm (2-step)\n1. **Cosine similarity** (similarityUtils.js) — fast first-pass on all answer pairs\n2. **Gemini explanation** — for each pair above threshold, generates a 2-sentence AI explanation\n\n### Response\n```json\n{ \"data\": { \"flaggedCount\":2, \"pairs\": [ { \"student1\":{\"name\":\"...\"}, \"student2\":{\"name\":\"...\"}, \"question\":{\"text\":\"...\"}, \"similarity\":0.92, \"flagged\":true, \"answer1\":\"...\", \"answer2\":\"...\", \"aiExplanation\":\"...\" } ] } }\n```\n\n### Test Cases\n- **TC-AI-40:** Exam with similar written answers → 200, pairs with flagged:true\n- **TC-AI-41:** Exam with no similar answers → 200, pairs:[], flaggedCount:0\n- **TC-AI-42:** Exam with < 2 submissions → 200, no pairs possible\n- **TC-AI-43:** Another instructor's exam → 403",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"threshold\": 0.85\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Plagiarism Report",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"instructorToken\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai/plagiarism/:examId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai",
+                "plagiarism",
+                ":examId"
+              ],
+              "variable": [
+                {
+                  "key": "examId",
+                  "value": "{{examId}}",
+                  "description": ""
+                }
+              ],
+              "query": []
+            },
+            "description": "**GET /api/ai/plagiarism/:examId**\n**Role:** Instructor or Admin\n\nRetrieves the most recent plagiarism report for an exam.\n\n### Test Cases\n- **TC-AI-44:** Report exists → 200, full report with pairs\n- **TC-AI-45:** No report generated yet → 404",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "event": [],
+      "_postman_isSubFolder": true
+    }
+  ]
+}

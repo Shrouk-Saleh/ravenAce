@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Raven ACE</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+    rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            // Every color below points to a CSS variable defined in
+            // <style> for :root and .dark. This means switching the
+            // "dark" class on <html> instantly re-themes every
+            // bg-*, text-*, border-* class already used across all
+            // pages — no per-component dark: variants needed.
+            "primary": "var(--color-primary)",
+            "on-primary": "var(--color-on-primary)",
+            "primary-container": "var(--color-primary-container)",
+            "on-primary-container": "var(--color-on-primary-container)",
+            "secondary": "var(--color-secondary)",
+            "secondary-container": "var(--color-secondary-container)",
+            "on-secondary-container": "var(--color-on-secondary-container)",
+            "background": "var(--color-background)",
+            "surface": "var(--color-surface)",
+            "surface-container-lowest": "var(--color-surface-container-lowest)",
+            "surface-container-low": "var(--color-surface-container-low)",
+            "surface-container": "var(--color-surface-container)",
+            "surface-container-high": "var(--color-surface-container-high)",
+            "surface-container-highest": "var(--color-surface-container-highest)",
+            "on-surface": "var(--color-on-surface)",
+            "on-surface-variant": "var(--color-on-surface-variant)",
+            "outline": "var(--color-outline)",
+            "outline-variant": "var(--color-outline-variant)",
+            "error": "var(--color-error)",
+            "error-container": "var(--color-error-container)",
+            "on-error-container": "var(--color-on-error-container)",
+            "tertiary-container": "var(--color-tertiary-container)",
+            "on-tertiary-container": "var(--color-on-tertiary-container)",
+          },
+          spacing: {
+            "sidebar-width": "280px",
+            "gutter": "24px",
+            "margin-mobile": "16px",
+          },
+          borderRadius: {
+            DEFAULT: "0.25rem",
+            lg: "0.5rem",
+            xl: "0.75rem",
+            full: "9999px",
+          },
+          fontFamily: { sans: ["Inter", "sans-serif"] },
+          fontSize: {
+            "display-sm": ["30px", { lineHeight: "38px", letterSpacing: "-0.02em", fontWeight: "700" }],
+            "h1": ["24px", { lineHeight: "32px", letterSpacing: "-0.01em", fontWeight: "600" }],
+            "h2": ["20px", { lineHeight: "28px", fontWeight: "600" }],
+            "h3": ["18px", { lineHeight: "26px", fontWeight: "600" }],
+            "body-lg": ["16px", { lineHeight: "24px", fontWeight: "400" }],
+            "body-md": ["14px", { lineHeight: "20px", fontWeight: "400" }],
+            "label-md": ["14px", { lineHeight: "20px", fontWeight: "500" }],
+            "label-sm": ["12px", { lineHeight: "16px", letterSpacing: "0.01em", fontWeight: "500" }],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* ── Light theme (default) ───────────────────────────────── */
+    :root {
+      --color-primary: #004ac6;
+      --color-on-primary: #ffffff;
+      --color-primary-container: #204eb1;
+      --color-on-primary-container: #eeefff;
+      --color-secondary: #0a9396;
+      --color-secondary-container: #6063ee;
+      --color-on-secondary-container: #fffbff;
+      --color-background: #f8f9ff;
+      --color-surface: #f8f9ff;
+      --color-surface-container-lowest: #ffffff;
+      --color-surface-container-low: #eff4ff;
+      --color-surface-container: #e5eeff;
+      --color-surface-container-high: #dce9ff;
+      --color-surface-container-highest: #d3e4fe;
+      --color-on-surface: #0b1c30;
+      --color-on-surface-variant: #434655;
+      --color-outline: #737686;
+      --color-outline-variant: #c3c6d7;
+      --color-error: #ba1a1a;
+      --color-error-container: #ffdad6;
+      --color-on-error-container: #93000a;
+      --color-tertiary-container: #bc4800;
+      --color-on-tertiary-container: #ffede6;
+    }
+
+    /* ── Dark theme — toggled via .dark class on <html> ─────────
+         Mapping follows Material You dark-theme conventions: surfaces
+         get darker as they go from background, containers use the
+         strong brand color but on-* text stays light for contrast. */
+    html.dark {
+      --color-primary: #aec6ff;
+      --color-on-primary: #002e6d;
+      --color-primary-container: #204eb1;
+      --color-on-primary-container: #eeefff;
+      --color-secondary: #c2c1ff;
+      --color-secondary-container: #0a9396;
+      --color-on-secondary-container: #fffbff;
+      --color-background: #10131c;
+      --color-surface: #10131c;
+      --color-surface-container-lowest: #0a0d15;
+      --color-surface-container-low: #181c28;
+      --color-surface-container: #1d2230;
+      --color-surface-container-high: #282e3e;
+      --color-surface-container-highest: #333a4c;
+      --color-on-surface: #e2e2e9;
+      --color-on-surface-variant: #c3c6d7;
+      --color-outline: #8d909f;
+      --color-outline-variant: #434655;
+      --color-error: #ffb4ab;
+      --color-error-container: #93000a;
+      --color-on-error-container: #ffdad6;
+      --color-tertiary-container: #ffb787;
+      --color-on-tertiary-container: #4a2800;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+
+    .input-halo:focus {
+      box-shadow: 0 0 0 2px #dbe1ff;
+    }
+
+    html.dark .input-halo:focus {
+      box-shadow: 0 0 0 2px #2563eb55;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(-8px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
+</head>
+
+<body class="bg-background text-on-surface min-h-screen transition-colors duration-200">
+  <div id="root"></div>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+
+</html>

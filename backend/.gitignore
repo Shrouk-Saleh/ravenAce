@@ -1,0 +1,11 @@
+node_modules/
+.env
+uploads/
+
+# Stripe CLI binary — should never be committed to version control
+stripe.exe
+stripe
+
+# OS artifacts
+.DS_Store
+Thumbs.db
