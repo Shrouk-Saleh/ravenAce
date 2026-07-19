@@ -42,6 +42,19 @@ const getAiHealth = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// ─── SECURITY: Ownership check helper ───────────────────────────────────────
+// Ensures an instructor can only access attempts/exams they own.
+// Admins bypass this check. Returns an AppError or null.
+const checkInstructorOwnership = async (req, examId) => {
+  if (req.user.role === "admin") return null; // admins can access anything
+  const exam = await Exam.findById(examId);
+  if (!exam) return new AppError("Exam not found.", 404);
+  if (exam.instructor.toString() !== req.user._id.toString()) {
+    return new AppError("Not authorized to access this exam's data.", 403);
+  }
+  return null;
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // WRITTEN GRADING — Grade a single written answer
 // POST /api/ai/grade-written/:attemptId/:questionId
@@ -54,6 +67,10 @@ const gradeWritten = async (req, res, next) => {
       status: { $in: ["submitted", "timed-out", "auto-submitted"] },
     });
     if (!attempt) return next(new AppError("Submitted attempt not found.", 404));
+
+    // SECURITY: Ownership check
+    const ownerErr = await checkInstructorOwnership(req, attempt.exam);
+    if (ownerErr) return next(ownerErr);
 
     const question = await Question.findById(req.params.questionId);
     if (!question || question.type !== "written") {
@@ -116,6 +133,10 @@ const gradeAllWritten = async (req, res, next) => {
       status: { $in: ["submitted", "timed-out", "auto-submitted"] },
     });
     if (!attempt) return next(new AppError("Submitted attempt not found.", 404));
+
+    // SECURITY: Ownership check
+    const ownerErr = await checkInstructorOwnership(req, attempt.exam);
+    if (ownerErr) return next(ownerErr);
 
     // Fetch all written questions in this attempt
     const questionIds = attempt.savedAnswers.map((a) => a.question);
@@ -408,6 +429,10 @@ const runCheatAnalysis = async (req, res, next) => {
     const attempt = await Attempt.findById(req.params.attemptId).populate("exam", "title passingScore");
     if (!attempt) return next(new AppError("Attempt not found.", 404));
 
+    // SECURITY: Ownership check
+    const ownerErr = await checkInstructorOwnership(req, attempt.exam._id || attempt.exam);
+    if (ownerErr) return next(ownerErr);
+
     const violations = await CheatLog.find({ attempt: attempt._id }).sort({ detectedAt: 1 });
     const exam = await Exam.findById(attempt.exam).populate("questions");
 
@@ -447,6 +472,13 @@ const getCheatAnalysis = async (req, res, next) => {
       type: "cheat",
     });
     if (!analysis) return next(new AppError("No cheat analysis found. Run it first.", 404));
+
+    // SECURITY: Ownership check — load the attempt to verify exam ownership
+    const attempt = await Attempt.findById(req.params.attemptId);
+    if (attempt) {
+      const ownerErr = await checkInstructorOwnership(req, attempt.exam);
+      if (ownerErr) return next(ownerErr);
+    }
     res.json({ status: "success", data: { analysis } });
   } catch (err) { next(err); }
 };
@@ -463,6 +495,17 @@ const runPerformanceAnalysis = async (req, res, next) => {
       .populate("exam", "title category totalScore passingScore");
 
     if (!attempt) return next(new AppError("Attempt not found.", 404));
+
+    // SECURITY: Ownership check
+    if (req.user.role === "student") {
+      if (attempt.student.toString() !== req.user._id.toString()) {
+        return next(new AppError("Not authorized to access this exam's data.", 403));
+      }
+    } else {
+      const ownerErr = await checkInstructorOwnership(req, attempt.exam._id || attempt.exam);
+      if (ownerErr) return next(ownerErr);
+    }
+
     if (!["submitted", "timed-out", "auto-submitted"].includes(attempt.status)) {
       return next(new AppError("Attempt is not yet submitted.", 400));
     }
@@ -521,6 +564,10 @@ const runPlagiarismDetection = async (req, res, next) => {
     const exam = await Exam.findById(req.params.examId);
     if (!exam) return next(new AppError("Exam not found.", 404));
 
+    // SECURITY: Ownership check
+    const ownerErr = await checkInstructorOwnership(req, exam._id);
+    if (ownerErr) return next(ownerErr);
+
     const threshold = parseFloat(req.body.threshold) || 0.85;
 
     const { pairs, flaggedCount } = await detectPlagiarism({
@@ -559,6 +606,10 @@ const getPlagiarismReport = async (req, res, next) => {
       .populate("generatedBy", "name");
 
     if (!report) return next(new AppError("No plagiarism report found. Run detection first.", 404));
+
+    // SECURITY: Ownership check
+    const ownerErr = await checkInstructorOwnership(req, report.exam);
+    if (ownerErr) return next(ownerErr);
     res.json({ status: "success", data: { report } });
   } catch (err) { next(err); }
 };

@@ -1,0 +1,30 @@
+{
+  "app": {
+    "name": "RavenACE Secure Engine",
+    "version": "1.0.0"
+  },
+  "backend": {
+    "baseUrl": "http://localhost:5000",
+    "apiPrefix": "",
+    "timeout": 15000
+  },
+  "window": {
+    "defaultWidth": 1280,
+    "defaultHeight": 800,
+    "minWidth": 1024,
+    "minHeight": 700
+  },
+  "session": {
+    "tokenValiditySeconds": 120,
+    "gracePeriodSeconds": 60
+  },
+  "encryption": {
+    "algorithm": "aes-256-gcm",
+    "_NOTE": "NEVER hardcode encryption keys here. Generate at first run via electron.safeStorage or OS keychain."
+  },
+  "logging": {
+    "auditLogDir": "logs",
+    "maxLogSizeMB": 10,
+    "rotateAfterDays": 7
+  }
+}

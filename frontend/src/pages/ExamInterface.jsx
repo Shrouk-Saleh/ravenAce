@@ -162,27 +162,36 @@ function ExamInterface() {
 
   // ── Countdown timer ─────────────────────────────────────────────────
   useEffect(() => {
-    if (timeLeft === null) return
+    if (!attempt || !attempt.startedAt) return
 
-    if (timeLeft <= 0) {
+    const durationMinutes = attempt.exam?.duration ?? 30
+    const totalSeconds = durationMinutes * 60
+    const startedAtTime = new Date(attempt.startedAt).getTime()
+
+    const calculateTimeLeft = () => {
+      const elapsedSeconds = (Date.now() - startedAtTime) / 1000
+      return Math.max(0, Math.floor(totalSeconds - elapsedSeconds))
+    }
+
+    const currentLeft = calculateTimeLeft()
+    if (currentLeft <= 0) {
       submitRef.current(true)
       return
     }
 
     timerRef.current = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current)
-          submitRef.current(true)
-          return 0
-        }
-        return prev - 1
-      })
+      const newTimeLeft = calculateTimeLeft()
+      if (newTimeLeft <= 0) {
+        clearInterval(timerRef.current)
+        setTimeLeft(0)
+        submitRef.current(true)
+      } else {
+        setTimeLeft(newTimeLeft)
+      }
     }, 1000)
 
     return () => clearInterval(timerRef.current)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeLeft === null])
+  }, [attempt])
 
   // ── Unmount cleanup ─────────────────────────────────────────────────
   // Cancel all pending debounced saves when the component unmounts
@@ -521,9 +530,14 @@ function ExamInterface() {
                         </button>
                       ))}
                     </div>
-                    <span className="ml-auto inline-flex items-center gap-1 text-label-sm text-primary">
-                      <span className="material-symbols-outlined text-[14px]">smart_toy</span> Gemini AI graded
-                    </span>
+                    <div className="ml-auto flex flex-col items-end">
+                      <span className="inline-flex items-center gap-1 text-label-sm text-primary">
+                        <span className="material-symbols-outlined text-[14px]">smart_toy</span> Gemini AI evaluated
+                      </span>
+                      <span className="text-[10px] text-outline-variant mt-0.5 max-w-[200px] text-right">
+                        Note: Code execution and grading are simulated by AI for this version.
+                      </span>
+                    </div>
                   </div>
 
                   {/* Code editor */}

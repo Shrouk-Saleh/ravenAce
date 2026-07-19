@@ -108,6 +108,15 @@ const attemptSchema = new mongoose.Schema(
     // Full per-question breakdown (populated on submit)
     perQuestionResult: [perQuestionResultSchema],
 
+    // ── Secure Session Fields (Electron Engine) ───────────────────────────
+    secureSessionToken: { type: String, default: null }, // Hashed one-time token
+    lastSeen: { type: Date, default: null }, // Heartbeat
+    submissionReason: {
+      type: String,
+      enum: ["manual", "timer_end", "heartbeat_failed", "forced", "auto_cheat", null],
+      default: null,
+    },
+
     // ── AI Analysis refs ──────────────────────────────────────────────────
     // Set after AI performance analysis is generated
     performanceAnalysis: {

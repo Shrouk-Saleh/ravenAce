@@ -22,6 +22,7 @@ const adminRoutes = require("./routes/adminRoutes");
 const aiRoutes = require("./routes/aiRoutes");
 const organizationRoutes = require("./routes/organizationRoutes");
 const stripeRoutes = require("./routes/stripeRoutes");
+const secureSessionRoutes = require("./routes/secureSessionRoutes");
 
 const app = express();
 connectDB();
@@ -30,7 +31,10 @@ app.use(helmet({
   crossOriginResourcePolicy: false,
 }));
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:5173",
+  origin: [
+    process.env.FRONTEND_URL || "http://localhost:5173",
+    process.env.ELECTRON_ORIGIN || "ravenace://"
+  ],
   credentials: true,
 }));
 
@@ -60,6 +64,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/organization", organizationRoutes);
 app.use("/api/stripe", stripeRoutes);
+app.use("/api/secure-session", secureSessionRoutes);
 
 app.use(globalErrorHandler);
 

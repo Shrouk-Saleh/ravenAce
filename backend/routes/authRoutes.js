@@ -21,7 +21,7 @@ router.post("/register", authLimiter, register);
 router.post("/login", authLimiter, login);
 router.post("/activate-account", authLimiter, activateAccount);
 router.post("/forgot-password", authLimiter, forgotPassword);
-router.post("/verify-reset-otp", verifyResetOTP);
+router.post("/verify-reset-otp", authLimiter, verifyResetOTP);
 router.post("/reset-password", resetPassword);
 
 module.exports = router;

@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" 
+    content="default-src 'self'; 
+             script-src 'self' 'unsafe-inline'; 
+             style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; 
+             font-src 'self' https://fonts.gstatic.com;
+             img-src 'self' data: https://api.qrserver.com;
+             connect-src 'self' http://localhost:5000 ws://localhost:5000;" />
+  <title>RavenACE Secure Exam Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL@20..48,100..700,0..1" rel="stylesheet" />
+  <style>
+    /* ── Base Reset & Theme ──────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%;
+      background-color: #0c1d3a; color: #e8ecf4;
+      font-family: 'Inter', system-ui, sans-serif;
+      overflow: hidden; /* Prevent body scroll */
+    }
+    #app {
+      width: 100%; height: 100%;
+      display: flex; flex-direction: column;
+    }
+
+    /* ── Loading / Error Screens ─────────────────────────────────────────── */
+    #loading-screen, #error-screen {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(180deg, #0c1d3a 0%, #121f36 100%);
+      z-index: 1000;
+    }
+
+    #error-screen {
+      display: none;
+    }
+
+    .logo-container {
+      width: 80px; height: 80px;
+      border-radius: 20px;
+      background: rgba(74, 158, 255, 0.1);
+      border: 1px solid rgba(74, 158, 255, 0.2);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 24px;
+      box-shadow: 0 0 40px rgba(74, 158, 255, 0.1);
+    }
+
+    .logo-container .material-symbols-outlined {
+      font-size: 40px; color: #4a9eff;
+    }
+
+    .error-icon {
+      width: 64px; height: 64px;
+      border-radius: 50%;
+      background: rgba(248, 113, 113, 0.1);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 20px;
+    }
+
+    .error-icon .material-symbols-outlined {
+      font-size: 32px; color: #f87171;
+    }
+
+    .loading-text {
+      font-size: 20px; font-weight: 700;
+      color: #e8ecf4; margin-bottom: 8px;
+    }
+
+    .loading-sub {
+      font-size: 14px; color: #8899b4; margin-bottom: 32px;
+    }
+
+    .spinner {
+      width: 24px; height: 24px;
+      border: 3px solid rgba(74, 158, 255, 0.2);
+      border-top-color: #4a9eff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .error-title {
+      font-size: 20px; font-weight: 700;
+      color: #f87171; margin-bottom: 8px;
+    }
+
+    .error-message {
+      font-size: 14px; color: #8899b4;
+      text-align: center; max-width: 400px;
+      line-height: 1.5;
+    }
+
+    /* ── Exam Container (populated by React renderer in Phase 6) ──────── */
+    #exam-root {
+      display: none;
+      height: 100%;
+      width: 100%;
+      flex: 1;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- Loading screen shown during token validation -->
+    <div id="loading-screen">
+      <div class="logo-container">
+        <span class="material-symbols-outlined">shield_lock</span>
+      </div>
+      <p class="loading-text">RavenACE Secure Engine</p>
+      <p class="loading-sub">Validating session…</p>
+      <div class="spinner"></div>
+    </div>
+
+    <!-- Error screen shown on validation failure -->
+    <div id="error-screen">
+      <div class="error-icon">
+        <span class="material-symbols-outlined">error</span>
+      </div>
+      <p class="error-title">Session Error</p>
+      <p id="error-message-text" style="color: #8899b4; max-width: 400px; line-height: 1.5; margin-bottom: 24px; text-align: center;">
+        Could not validate your exam session. Please close this window and try again.
+      </p>
+      <button id="close-error-btn" style="background: #3b82f6; color: white; border: none; padding: 10px 24px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+        Close Exam Window
+      </button>
+    </div>
+
+    <!-- Exam UI root (React components mount here in Phase 6) -->
+    <div id="exam-root"></div>
+  </div>
+
+  <script>
+    // ── Renderer Bootstrap ────────────────────────────────────────────────
+    // This minimal script handles the initial loading/error states.
+    // The full exam UI (ExamView, Timer, QuestionNavigator) will be built
+    // as React components in Phase 6 and will mount into #exam-root.
+
+    const loadingScreen = document.getElementById('loading-screen');
+    const errorScreen = document.getElementById('error-screen');
+    const errorMessage = document.getElementById('error-message-text');
+    const examRoot = document.getElementById('exam-root');
+
+    // Listen for the initialization signal from main process
+    window.ravenAPI.onAppInit(async (data) => {
+      try {
+        // Reset state for new attempts (especially for second-instance launches)
+        errorScreen.style.display = 'none';
+        loadingScreen.style.display = 'flex';
+        examRoot.style.display = 'none';
+        if (data.error) {
+          showError(data.error);
+          return;
+        }
+
+        const token = data.token;
+        if (!token) {
+          showError('No session token provided. Please start the exam from the web app.');
+          return;
+        }
+
+        // Validate token with backend (via main process)
+        const result = await window.ravenAPI.validateToken(token);
+
+        if (result && result.valid) {
+          // Success — hide loading, show exam UI
+          loadingScreen.style.display = 'none';
+          examRoot.style.display = 'flex';
+          // Notify React to start fetching.
+          window.dispatchEvent(new CustomEvent('session-validated'));
+        } else {
+          showError(result?.reason || 'Token validation failed. Please try starting the exam again.');
+        }
+      } catch (err) {
+        showError('An unexpected error occurred. Please close and retry.');
+      }
+    });
+
+    document.getElementById('close-error-btn').addEventListener('click', () => {
+      window.ravenAPI.requestExit();
+    });
+
+    function showError(message) {
+      loadingScreen.style.display = 'none';
+      errorScreen.style.display = 'flex';
+      errorMessage.textContent = message;
+      // Report failure to main process
+      window.ravenAPI.reportLaunchResult({ status: 'TOKEN_INVALID', message });
+    }
+  </script>
+
+  <!-- Load React entry point -->
+  <script type="module" src="./src/main.jsx"></script>
+</body>
+</html>

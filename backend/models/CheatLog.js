@@ -18,8 +18,32 @@ const cheatLogSchema = new mongoose.Schema(
     },
     eventType: {
       type: String,
-      enum: ["tab-switch", "fullscreen-exit", "copy", "paste", "right-click"],
+      enum: [
+        // Existing (web browser)
+        "tab-switch", "fullscreen-exit", "copy", "paste", "right-click",
+        // New (Electron engine)
+        "focus_lost", "fullscreen_exited", "clipboard_used",
+        "forbidden_process", "second_monitor", "window_minimized",
+        "shortcut_blocked", "heartbeat_failed", "devtools_attempt",
+        "screen_capture_attempt"
+      ],
       required: true,
+    },
+    severity: {
+      type: String,
+      enum: ["low", "medium", "high", "critical"],
+      default: "medium",
+    },
+    metadata: {
+      description: { type: String, default: "" },
+      processName: { type: String, default: null },
+      shortcutKey: { type: String, default: null },
+      additionalInfo: { type: mongoose.Schema.Types.Mixed, default: {} },
+    },
+    source: {
+      type: String,
+      enum: ["web", "electron"],
+      default: "web",
     },
     detectedAt: { type: Date, default: Date.now },
   },

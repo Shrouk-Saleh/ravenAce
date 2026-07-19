@@ -179,10 +179,17 @@ const exportCSV = async (req, res, next) => {
     }).populate("student", "name email");
 
     // Build CSV rows manually — no library needed for simple flat data
+    // SECURITY: Sanitize fields to prevent CSV/Excel formula injection.
+    // A leading =, +, -, @, tab, or CR in a cell can execute formulas.
+    const sanitizeCSV = (val) => {
+      const s = String(val || "N/A");
+      if (/^[=+\-@\t\r]/.test(s)) return "'" + s; // prefix with single quote
+      return s;
+    };
     const header = "Name,Email,Score,Total,Passed,Time (sec),Attempt #,Status,Submitted At\n";
     const rows = attempts.map(a => {
-      const name = `"${a.student?.name || "N/A"}"`;
-      const email = `"${a.student?.email || "N/A"}"`;
+      const name = `"${sanitizeCSV(a.student?.name)}"`;
+      const email = `"${sanitizeCSV(a.student?.email)}"`;
       return `${name},${email},${a.score},${exam.totalScore},${a.passed},${a.timeTaken},${a.attemptNumber},${a.status},${a.submittedAt?.toISOString() || ""}`;
     });
 

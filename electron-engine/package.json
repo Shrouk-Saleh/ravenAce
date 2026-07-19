@@ -1,0 +1,71 @@
+{
+  "name": "ravenace-secure-engine",
+  "version": "1.0.0",
+  "description": "RavenACE Secure Exam Engine — config-driven proctored exam delivery",
+  "main": "main/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dev": "cross-env NODE_ENV=development electron .",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:all": "electron-builder --win --mac"
+  },
+  "build": {
+    "appId": "com.ravenace.secure-engine",
+    "productName": "RavenACE Secure Engine",
+    "protocols": [
+      {
+        "name": "RavenACE Secure Exam",
+        "schemes": [
+          "ravenace"
+        ]
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.education"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false
+    },
+    "files": [
+      "main/**",
+      "preload/**",
+      "renderer/**",
+      "core/**",
+      "security/**",
+      "communication/**",
+      "storage/**",
+      "services/**",
+      "ipc/**",
+      "shared/**",
+      "config/**",
+      "assets/**"
+    ]
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "electron-store": "^8.2.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "socket.io-client": "^4.7.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.2",
+    "@vitejs/plugin-react": "^6.0.3",
+    "cross-env": "^7.0.3",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.0",
+    "tailwindcss": "^4.3.2",
+    "vite": "^8.1.4"
+  }
+}

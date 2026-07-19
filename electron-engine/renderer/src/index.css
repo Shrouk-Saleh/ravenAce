@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+/* RavenACE Tailwind Theme Adjustments */
+@theme {
+  --color-bg-primary: #0c1d3a;
+  --color-bg-surface: #121f36;
+  --color-bg-card: #1a2c4e;
+  --color-text-primary: #e8ecf4;
+  --color-text-secondary: #8899b4;
+  --color-accent: #4a9eff;
+  --color-success: #34d399;
+  --color-warning: #fbbf24;
+  --color-error: #f87171;
+  --color-border: rgba(255, 255, 255, 0.08);
+}
+
+@layer base {
+  body {
+    @apply bg-bg-primary text-text-primary overflow-hidden font-sans antialiased;
+  }
+}

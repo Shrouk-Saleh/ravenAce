@@ -11,11 +11,17 @@ const { AppError } = require("../utils/errorUtils");
 // ────────────────────────────────────────────────────────────────
 const getAllUsers = async (req, res, next) => {
   try {
-    const users = await User.find().sort({ createdAt: -1 });
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 50;
+    const skip = (page - 1) * limit;
+
+    const total = await User.countDocuments();
+    const users = await User.find().sort({ createdAt: -1 }).skip(skip).limit(limit);
+
     res.status(200).json({
       status: "success",
       results: users.length,
-      data: { users },
+      data: { users, total, page, limit },
     });
   } catch (err) {
     next(err);

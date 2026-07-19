@@ -1,0 +1,51 @@
+{
+  "features": {
+    "focusTracking": true,
+    "displayTracking": true,
+    "inputBlocking": true,
+    "processScanning": true
+  },
+  "focus": {
+    "enabled": true
+  },
+  "display": {
+    "enabled": true
+  },
+  "input": {
+    "blocklist": ["PrintScreen", "CommandOrControl+Shift+I", "F12", "CommandOrControl+R", "CommandOrControl+Shift+R", "CommandOrControl+W", "CommandOrControl+N", "CommandOrControl+T", "CommandOrControl+L", "Alt+F4", "Meta+D"],
+    "allowlist": [],
+    "softBlock": ["Alt+Tab", "Meta", "Meta+Tab"]
+  },
+  "process": {
+    "forbiddenList": "forbiddenProcesses.json"
+  },
+  "heartbeat": {
+    "intervalSeconds": 15,
+    "maxMissedBeats": 3,
+    "actionOnFailure": "auto_submit"
+  },
+  "autoSave": {
+    "intervalSeconds": 30,
+    "retryIntervalSeconds": 10,
+    "maxOfflineBuffer": 50
+  },
+  "violations": {
+    "focusLost": { "severity": "medium", "enabled": true },
+    "fullscreenExited": { "severity": "high", "enabled": true },
+    "clipboardUsed": { "severity": "medium", "enabled": true },
+    "windowMinimized": { "severity": "low", "enabled": true },
+    "secondMonitor": { "severity": "high", "enabled": true },
+    "forbiddenProcess": { "severity": "critical", "enabled": true },
+    "shortcutBlocked": { "severity": "medium", "enabled": true },
+    "devtoolsAttempt": { "severity": "critical", "enabled": true },
+    "screenCaptureAttempt": { "severity": "critical", "enabled": true }
+  },
+  "strikes": {
+    "limits": {
+      "low": 10,
+      "medium": 5,
+      "high": 3,
+      "critical": 1
+    }
+  }
+}

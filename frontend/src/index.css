@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: var(--color-primary);
+  --color-on-primary: var(--color-on-primary);
+  --color-primary-container: var(--color-primary-container);
+  --color-on-primary-container: var(--color-on-primary-container);
+  --color-secondary: var(--color-secondary);
+  --color-secondary-container: var(--color-secondary-container);
+  --color-on-secondary-container: var(--color-on-secondary-container);
+  --color-background: var(--color-background);
+  --color-surface: var(--color-surface);
+  --color-surface-container-lowest: var(--color-surface-container-lowest);
+  --color-surface-container-low: var(--color-surface-container-low);
+  --color-surface-container: var(--color-surface-container);
+  --color-surface-container-high: var(--color-surface-container-high);
+  --color-surface-container-highest: var(--color-surface-container-highest);
+  --color-on-surface: var(--color-on-surface);
+  --color-on-surface-variant: var(--color-on-surface-variant);
+  --color-outline: var(--color-outline);
+  --color-outline-variant: var(--color-outline-variant);
+  --color-error: var(--color-error);
+  --color-error-container: var(--color-error-container);
+  --color-on-error-container: var(--color-on-error-container);
+  --color-tertiary-container: var(--color-tertiary-container);
+  --color-on-tertiary-container: var(--color-on-tertiary-container);
+
+  --spacing-sidebar-width: 280px;
+  --spacing-gutter: 24px;
+  --spacing-margin-mobile: 16px;
+
+  --font-sans: "Inter", sans-serif;
+
+  --text-display-sm: 30px;
+  --text-display-sm--line-height: 38px;
+  --text-display-sm--letter-spacing: -0.02em;
+  --text-display-sm--font-weight: 700;
+
+  --text-h1: 24px;
+  --text-h1--line-height: 32px;
+  --text-h1--letter-spacing: -0.01em;
+  --text-h1--font-weight: 600;
+
+  --text-h2: 20px;
+  --text-h2--line-height: 28px;
+  --text-h2--font-weight: 600;
+
+  --text-h3: 18px;
+  --text-h3--line-height: 26px;
+  --text-h3--font-weight: 600;
+
+  --text-body-lg: 16px;
+  --text-body-lg--line-height: 24px;
+  --text-body-lg--font-weight: 400;
+
+  --text-body-md: 14px;
+  --text-body-md--line-height: 20px;
+  --text-body-md--font-weight: 400;
+
+  --text-label-md: 14px;
+  --text-label-md--line-height: 20px;
+  --text-label-md--font-weight: 500;
+
+  --text-label-sm: 12px;
+  --text-label-sm--line-height: 16px;
+  --text-label-sm--letter-spacing: 0.01em;
+  --text-label-sm--font-weight: 500;
+}

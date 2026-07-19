@@ -11,7 +11,145 @@ const { gradeCodeAnswer } = require("../services/codeGraderService");
 // How many violations before the exam is auto-submitted
 const MAX_VIOLATIONS = 3;
 
-// ─── Shared grading helper ────────────────────────────────────────────────
+// ─── Security: Strip answer keys from questions before sending to students ───
+// This prevents students from reading correct answers via DevTools/Network tab.
+// Pattern matches examController.getExamById's redaction, extended to also strip
+// modelAnswer, gradingCriteria, and hidden test case expectedOutputs.
+const sanitizeQuestionsForStudent = (questions) => {
+  if (!questions) return [];
+  return questions.filter(Boolean).map((q) => {
+    const qObj = q.toObject ? q.toObject() : { ...q };
+    delete qObj.correctAnswer;
+    delete qObj.explanation;
+    delete qObj.modelAnswer;
+    delete qObj.gradingCriteria;
+    // Strip hidden test case expected outputs (students shouldn't see these)
+    if (qObj.testCases && Array.isArray(qObj.testCases)) {
+      qObj.testCases = qObj.testCases.map((tc) => {
+        if (tc.isHidden) {
+          const { expectedOutput, ...rest } = tc;
+          return rest;
+        }
+        return tc;
+      });
+    }
+    return qObj;
+  });
+};
+
+// ─── Shared full grading helper ───────────────────────────────────────────
+// Grades AI questions, calculates score, applies penalties, updates status, and saves.
+const gradeAndScore = async (attempt, exam, timedOut = false) => {
+  // Grade every question using the shared helper (sync for MCQ/TF)
+  const { correctCount, perQuestionResult } = gradeAttempt(
+    exam.questions,
+    attempt.savedAnswers
+  );
+
+  // Auto-grade written and coding questions sequentially
+  for (const q of exam.questions) {
+    const rIdx = perQuestionResult.findIndex(r => r.question.toString() === q._id.toString());
+    if (rIdx === -1) continue;
+    const r = perQuestionResult[rIdx];
+
+    if (q.type === "written") {
+      try {
+        const gradeResult = await gradeWrittenAnswer({
+          questionText: q.text,
+          modelAnswer: q.modelAnswer || "",
+          gradingCriteria: q.gradingCriteria || "",
+          studentAnswer: r.studentAnswer || "",
+          maxScore: q.maxScore || 10,
+        });
+        r.score = gradeResult.score;
+        r.isCorrect = gradeResult.score >= (q.maxScore || 10) * 0.6;
+        r.feedback = gradeResult.feedback;
+        r.strengths = gradeResult.strengths;
+        r.weaknesses = gradeResult.weaknesses;
+        r.aiGraded = true;
+      } catch (err) {
+        console.error("Auto-grade written failed:", err.message);
+      }
+    } else if (q.type === "coding") {
+      try {
+        const savedCode = attempt.savedAnswers.find(
+          (a) => a.question.toString() === q._id.toString()
+        );
+        const sourceCode = savedCode?.codeAnswer || "";
+        const language = savedCode?.language || "python";
+
+        const gradeResult = await gradeCodeAnswer({
+          questionText: q.text,
+          sourceCode,
+          language,
+          testCases: q.testCases || [],
+          maxScore: q.maxScore || 10,
+        });
+
+        r.studentAnswer = `[${language} code]`;
+        r.score = gradeResult.score;
+        r.isCorrect = gradeResult.score >= (q.maxScore || 10) * 0.6;
+        r.feedback = gradeResult.feedback;
+        r.strengths = gradeResult.strengths;
+        r.weaknesses = gradeResult.weaknesses;
+        r.testResults = gradeResult.testResults;
+        r.codeReview = gradeResult.codeReview;
+        r.language = language;
+        r.aiGraded = true;
+      } catch (err) {
+        console.error("Auto-grade coding failed:", err.message);
+      }
+    }
+  }
+
+  let score = calculateScore(exam.questions, perQuestionResult, exam.totalScore);
+  
+  // Deduct points for violations
+  const violationCount = await CheatLog.countDocuments({ attempt: attempt._id });
+  const penaltyPerViolation = Math.round(exam.totalScore * 0.05); // 5% penalty
+  const totalPenalty = violationCount * penaltyPerViolation;
+  score = Math.max(0, score - totalPenalty);
+
+  const passed = score >= exam.passingScore;
+  const now = new Date();
+
+  // Server-side Time Validation (60s grace period)
+  const timeTakenSec = Math.round((now - attempt.startedAt) / 1000);
+  const maxAllowedSec = (exam.duration * 60) + 60;
+
+  let isTimedOut = timedOut;
+  if (timeTakenSec > maxAllowedSec) {
+    isTimedOut = true;
+  }
+
+  attempt.status = isTimedOut ? "timed-out" : "submitted";
+  attempt.submittedAt = now;
+  attempt.timeTaken = timeTakenSec;
+  attempt.score = score;
+  attempt.passed = passed;
+  attempt.perQuestionResult = perQuestionResult;
+  await attempt.save();
+
+  // Auto-create certificate if student passed
+  let certificate = null;
+  try {
+    certificate = await createCertificateIfPassed(attempt);
+  } catch (certErr) {
+    console.error("Certificate creation failed:", certErr.message);
+  }
+
+  // Send in-app notification
+  try {
+    const msg = passed
+      ? `You passed "${exam.title}" with a score of ${score}/${exam.totalScore}. Your certificate is ready!`
+      : `You scored ${score}/${exam.totalScore} on "${exam.title}". You did not pass this time.`;
+    await createNotification(attempt.student, "result", msg, attempt._id);
+  } catch (notifErr) {
+    console.error("Notification failed:", notifErr.message);
+  }
+
+  return { score, passed, correctCount, violationCount, totalPenalty, certificate };
+};
 // Extracted into its own function so both submitExam and logCheatEvent
 // use exactly the same grading logic — no duplication, no inconsistency.
 // NOTE: This only grades MCQ and True/False questions synchronously.
@@ -151,11 +289,14 @@ const startExam = async (req, res, next) => {
       .populate("exam", "title duration totalScore passingScore");
 
     if (existing) {
+      // SECURITY: Strip answer keys before sending to client
+      const sanitized = existing.toObject();
+      sanitized.questions = sanitizeQuestionsForStudent(existing.questions);
       return res.status(200).json({
         status: "success",
         message: "Resuming existing attempt.",
         resumed: true,
-        data: { attempt: existing },
+        data: { attempt: sanitized },
       });
     }
 
@@ -198,11 +339,14 @@ const startExam = async (req, res, next) => {
     await attempt.populate("questions");
     await attempt.populate("exam", "title duration totalScore passingScore");
 
+    // SECURITY: Strip answer keys before sending to client
+    const sanitized = attempt.toObject();
+    sanitized.questions = sanitizeQuestionsForStudent(attempt.questions);
     res.status(201).json({
       status: "success",
       message: "Exam started.",
       resumed: false,
-      data: { attempt },
+      data: { attempt: sanitized },
     });
   } catch (err) {
     next(err);
@@ -268,117 +412,28 @@ const saveAnswer = async (req, res, next) => {
 // timer-triggered auto-submit (frontend sends timedOut: true).
 const submitExam = async (req, res, next) => {
   try {
-    const attempt = await Attempt.findOne({
-      _id: req.params.id,
-      student: req.user._id,
-      status: "in-progress",
-    });
+    // SECURITY (M1): Atomic status transition to prevent double-submit race conditions
+    const attempt = await Attempt.findOneAndUpdate(
+      { _id: req.params.id, student: req.user._id, status: "in-progress" },
+      { $set: { status: "grading" } },
+      { new: true }
+    );
 
-    if (!attempt) return next(new AppError("Active attempt not found.", 404));
+    if (!attempt) {
+      // It might already be grading/submitted
+      const checkStatus = await Attempt.findById(req.params.id);
+      if (checkStatus && checkStatus.status !== "in-progress") {
+        return res.status(200).json({ status: "success", message: "Exam already submitted or grading." });
+      }
+      return next(new AppError("Active attempt not found.", 404));
+    }
 
     const exam = await Exam.findById(attempt.exam).populate("questions");
     exam.questions = exam.questions.filter(Boolean);
 
-    // Grade every question using the shared helper (sync for MCQ/TF)
-    const { correctCount, perQuestionResult } = gradeAttempt(
-      exam.questions,
-      attempt.savedAnswers
-    );
-
-    // Auto-grade written and coding questions sequentially using AI to avoid rate limits
-    for (const q of exam.questions) {
-      const rIdx = perQuestionResult.findIndex(r => r.question.toString() === q._id.toString());
-      if (rIdx === -1) return;
-      const r = perQuestionResult[rIdx];
-
-      if (q.type === "written") {
-        try {
-          const gradeResult = await gradeWrittenAnswer({
-            questionText: q.text,
-            modelAnswer: q.modelAnswer || "",
-            gradingCriteria: q.gradingCriteria || "",
-            studentAnswer: r.studentAnswer || "",
-            maxScore: q.maxScore || 10,
-          });
-          r.score = gradeResult.score;
-          r.isCorrect = gradeResult.score >= (q.maxScore || 10) * 0.6;
-          r.feedback = gradeResult.feedback;
-          r.strengths = gradeResult.strengths;
-          r.weaknesses = gradeResult.weaknesses;
-          r.aiGraded = true;
-        } catch (err) {
-          console.error("Auto-grade written failed:", err.message);
-        }
-      } else if (q.type === "coding") {
-        try {
-          const savedCode = attempt.savedAnswers.find(
-            (a) => a.question.toString() === q._id.toString()
-          );
-          const sourceCode = savedCode?.codeAnswer || "";
-          const language = savedCode?.language || "python";
-
-          const gradeResult = await gradeCodeAnswer({
-            questionText: q.text,
-            sourceCode,
-            language,
-            testCases: q.testCases || [],
-            maxScore: q.maxScore || 10,
-          });
-
-          r.studentAnswer = `[${language} code]`;
-          r.score = gradeResult.score;
-          r.isCorrect = gradeResult.score >= (q.maxScore || 10) * 0.6;
-          r.feedback = gradeResult.feedback;
-          r.strengths = gradeResult.strengths;
-          r.weaknesses = gradeResult.weaknesses;
-          r.testResults = gradeResult.testResults;
-          r.codeReview = gradeResult.codeReview;
-          r.language = language;
-          r.aiGraded = true;
-        } catch (err) {
-          console.error("Auto-grade coding failed:", err.message);
-        }
-      }
-    }
-
-    const score = calculateScore(exam.questions, perQuestionResult, exam.totalScore);
-    const passed = score >= exam.passingScore;
-    const now = new Date();
-
-    // Server-side Time Validation (60s grace period)
-    const timeTakenSec = Math.round((now - attempt.startedAt) / 1000);
-    const maxAllowedSec = (exam.duration * 60) + 60;
-
-    let isTimedOut = req.body.timedOut;
-    if (timeTakenSec > maxAllowedSec) {
-      isTimedOut = true; // Force timed out if submitted past deadline
-    }
-
-    attempt.status = isTimedOut ? "timed-out" : "submitted";
-    attempt.submittedAt = now;
-    attempt.timeTaken = timeTakenSec;
-    attempt.score = score;
-    attempt.passed = passed;
-    attempt.perQuestionResult = perQuestionResult;
-    await attempt.save();
-
-    // Auto-create certificate if student passed
-    let certificate = null;
-    try {
-      certificate = await createCertificateIfPassed(attempt);
-    } catch (certErr) {
-      console.error("Certificate creation failed:", certErr.message);
-    }
-
-    // Send in-app notification
-    try {
-      const msg = passed
-        ? `You passed "${exam.title}" with a score of ${score}/${exam.totalScore}. Your certificate is ready!`
-        : `You scored ${score}/${exam.totalScore} on "${exam.title}". You did not pass this time.`;
-      await createNotification(attempt.student, "result", msg, attempt._id);
-    } catch (notifErr) {
-      console.error("Notification failed:", notifErr.message);
-    }
+    // Run the shared grading logic
+    const { score, passed, correctCount, violationCount, totalPenalty, certificate } = 
+      await gradeAndScore(attempt, exam, req.body.timedOut);
 
     res.status(200).json({
       status: "success",
@@ -391,9 +446,18 @@ const submitExam = async (req, res, next) => {
         correctCount,
         totalQuestions: exam.questions.length,
         certificateId: certificate?._id || null,
+        violationCount,
+        penaltyApplied: totalPenalty
       },
     });
   } catch (err) {
+    // If grading fails, try to revert the status so they can resubmit, 
+    // unless it failed deep inside save() where we might be stuck.
+    await Attempt.updateOne(
+      { _id: req.params.id, status: "grading" },
+      { $set: { status: "in-progress" } }
+    ).catch(e => console.error("Could not revert grading status:", e));
+    
     next(err);
   }
 };
@@ -482,112 +546,42 @@ const logCheatEvent = async (req, res, next) => {
       return next(new AppError("Invalid event type.", 400));
     }
 
-    const attempt = await Attempt.findOne({
-      _id: req.params.id,
-      student: req.user._id,
-      status: "in-progress",
-    });
-
-    if (!attempt) return next(new AppError("Active attempt not found.", 404));
-
     // 1. Record the violation
     await CheatLog.create({
-      attempt: attempt._id,
+      attempt: req.params.id,
       student: req.user._id,
       eventType,
     });
 
-    // 2. Count all violations for this attempt
-    const total = await CheatLog.countDocuments({ attempt: attempt._id });
+    const total = await CheatLog.countDocuments({ attempt: req.params.id });
 
-    // 3. Auto-submit if threshold is reached
+    // 2. Check if we need to auto-submit
     if (total >= MAX_VIOLATIONS) {
-      const exam = await Exam.findById(attempt.exam).populate("questions");
-      exam.questions = exam.questions.filter(Boolean);
-
-      const { correctCount, perQuestionResult } = gradeAttempt(
-        exam.questions,
-        attempt.savedAnswers
+      const attempt = await Attempt.findOneAndUpdate(
+        { _id: req.params.id, student: req.user._id, status: "in-progress" },
+        { $set: { status: "grading" } },
+        { new: true }
       );
 
-      // Run AI grading concurrently for written/coding questions
-      // (same logic as submitExam — auto-submitted students deserve accurate grades)
-      const aiPromises = exam.questions.map(async (q) => {
-        const rIdx = perQuestionResult.findIndex(r => r.question.toString() === q._id.toString());
-        if (rIdx === -1) return;
-        const r = perQuestionResult[rIdx];
+      if (attempt) {
+        const exam = await Exam.findById(attempt.exam).populate("questions");
+        exam.questions = exam.questions.filter(Boolean);
 
-        if (q.type === "written") {
-          try {
-            const gradeResult = await gradeWrittenAnswer({
-              questionText: q.text,
-              modelAnswer: q.modelAnswer || "",
-              gradingCriteria: q.gradingCriteria || "",
-              studentAnswer: r.studentAnswer || "",
-              maxScore: q.maxScore || 10,
-            });
-            r.score = gradeResult.score;
-            r.isCorrect = gradeResult.score >= (q.maxScore || 10) * 0.6;
-            r.feedback = gradeResult.feedback;
-            r.strengths = gradeResult.strengths;
-            r.weaknesses = gradeResult.weaknesses;
-            r.aiGraded = true;
-          } catch (err) {
-            console.error("Auto-grade written (cheat auto-submit) failed:", err.message);
-          }
-        } else if (q.type === "coding") {
-          try {
-            const savedCode = attempt.savedAnswers.find(
-              (a) => a.question.toString() === q._id.toString()
-            );
-            const sourceCode = savedCode?.codeAnswer || "";
-            const language = savedCode?.language || "python";
-            const gradeResult = await gradeCodeAnswer({
-              questionText: q.text,
-              sourceCode,
-              language,
-              testCases: q.testCases || [],
-              maxScore: q.maxScore || 10,
-            });
-            r.studentAnswer = `[${language} code]`;
-            r.score = gradeResult.score;
-            r.isCorrect = gradeResult.score >= (q.maxScore || 10) * 0.6;
-            r.feedback = gradeResult.feedback;
-            r.strengths = gradeResult.strengths;
-            r.weaknesses = gradeResult.weaknesses;
-            r.testResults = gradeResult.testResults;
-            r.codeReview = gradeResult.codeReview;
-            r.language = language;
-            r.aiGraded = true;
-          } catch (err) {
-            console.error("Auto-grade coding (cheat auto-submit) failed:", err.message);
-          }
-        }
-      });
+        const { score, passed, violationCount, totalPenalty } = 
+          await gradeAndScore(attempt, exam, false);
 
-      await Promise.all(aiPromises);
-
-      const score = calculateScore(exam.questions, perQuestionResult, exam.totalScore);
-      const now = new Date();
-
-      attempt.status = "auto-submitted";
-      attempt.submittedAt = now;
-      attempt.timeTaken = Math.round((now - attempt.startedAt) / 1000);
-      attempt.score = score;
-      attempt.passed = score >= exam.passingScore;
-      attempt.perQuestionResult = perQuestionResult;
-      await attempt.save();
-
-      return res.status(200).json({
-        status: "success",
-        autoSubmitted: true,
-        message: "Exam auto-submitted due to too many violations.",
-        data: {
-          attemptId: attempt._id,
-          score: attempt.score,
-          passed: attempt.passed,
-        },
-      });
+        return res.status(200).json({
+          status: "success",
+          message: "Attempt automatically submitted due to excessive cheating.",
+          data: {
+            attemptId: attempt._id,
+            score,
+            passed,
+            violationCount,
+            penaltyApplied: totalPenalty
+          },
+        });
+      }
     }
 
     // 4. Still under the limit — send a warning back to the frontend

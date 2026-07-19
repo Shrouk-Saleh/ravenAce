@@ -46,10 +46,20 @@ const getAllQuestions = async (req, res, next) => {
 // ────────────────────────────────────────────────────────────────
 const createQuestion = async (req, res, next) => {
   try {
-    const question = await Question.create({
-      ...req.body,
-      instructor: req.user._id, // always from token
+    // SECURITY: Whitelist allowed fields — same pattern as updateQuestion below.
+    // Prevents mass-assignment of instructor, isDeleted, aiGenerated, etc.
+    const allowedFields = [
+      "text", "type", "options", "correctAnswer", "explanation",
+      "modelAnswer", "gradingCriteria", "codeTemplate", "allowedLanguages",
+      "timeLimit", "memoryLimit", "testCases", "maxScore",
+      "category", "tags", "difficulty",
+    ];
+    const questionData = { instructor: req.user._id };
+    allowedFields.forEach((f) => {
+      if (req.body[f] !== undefined) questionData[f] = req.body[f];
     });
+
+    const question = await Question.create(questionData);
 
     res.status(201).json({
       status: "success",

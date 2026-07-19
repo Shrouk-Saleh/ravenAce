@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build output
+dist/
+build/
+out/
+**/dist/
+
+# Electron
+electron-engine/dist/
+
+# Environment
+.env
+.env.*
+
+# Logs
+*.log

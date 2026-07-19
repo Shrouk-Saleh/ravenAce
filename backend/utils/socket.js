@@ -18,7 +18,10 @@ let io = null;
 const initSocket = (httpServer) => {
   io = new Server(httpServer, {
     cors: {
-      origin: process.env.FRONTEND_URL || "http://localhost:5173",
+      origin: [
+        process.env.FRONTEND_URL || "http://localhost:5173",
+        process.env.ELECTRON_ORIGIN || "ravenace://"
+      ],
       methods: ["GET", "POST"],
       credentials: true,
     },
