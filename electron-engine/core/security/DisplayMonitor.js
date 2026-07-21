@@ -15,6 +15,9 @@ class DisplayMonitor extends BaseMonitor {
   constructor(config) {
     super('DisplayMonitor');
     this.config = config;
+    if (typeof this.config.allowedMonitors !== 'number' || !Number.isFinite(this.config.allowedMonitors)) {
+      throw new Error("DisplayMonitor requires a finite number for config.allowedMonitors");
+    }
     this._handleDisplayAdded = this._handleDisplayAdded.bind(this);
   }
 

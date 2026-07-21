@@ -123,7 +123,8 @@ class ExamEngine {
       const state = this.services.sessionService.getState();
       if (state && state.attemptId && state.state === 'SUBMITTED') {
         const { shell } = require('electron');
-        shell.openExternal(`http://localhost:5173/results/${state.attemptId}`);
+        const frontendUrl = process.env.RAVENACE_FRONTEND_URL || 'http://localhost:5173';
+        shell.openExternal(`${frontendUrl}/results/${state.attemptId}`);
       }
     } catch(e) {
       console.error('[ExamEngine] Failed to open external results page:', e);

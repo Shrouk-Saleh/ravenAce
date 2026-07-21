@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import AppLayout from '../components/AppLayout'
 import api from '../api/axios'
 import socket from '../api/socket'
@@ -17,6 +19,8 @@ function Notifications() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [filter, setFilter] = useState('all') // all | unread
   const [loading, setLoading] = useState(true)
+  const navigate = useNavigate()
+  const { user } = useAuth()
 
   const loadNotifications = async () => {
     setLoading(true)
@@ -80,6 +84,23 @@ function Notifications() {
       if (removed && !removed.read) setUnreadCount(c => Math.max(0, c - 1))
     } catch (err) {
       console.error(err)
+    }
+  }
+
+  const handleNotificationClick = (n) => {
+    if (!n.read) {
+      markOneRead(n._id)
+    }
+
+    const isInstructor = user?.role === 'instructor' || user?.role === 'admin'
+
+    if (n.type === 'result' && n.refId) {
+      // Instructors see attempt detail; students see their own result page
+      navigate(isInstructor ? `/instructor/results/${n.refId}` : `/results/${n.refId}`)
+    } else if (n.type === 'certificate') {
+      navigate('/certificates')
+    } else if (n.type === 'new-exam' && n.refId) {
+      navigate(`/exams/${n.refId}`)
     }
   }
 
@@ -158,8 +179,9 @@ function Notifications() {
               return (
                 <div
                   key={n._id}
-                  className={`flex items-start gap-4 px-5 py-4 transition-all group
-                    ${!n.read ? 'bg-surface-container-low' : 'hover:bg-surface-container-low'}`}
+                  onClick={() => handleNotificationClick(n)}
+                  className={`flex items-start gap-4 px-5 py-4 transition-all group cursor-pointer
+                    ${!n.read ? 'bg-surface-container-low border-l-4 border-primary' : 'hover:bg-surface-container-low'}`}
                 >
                   {/* Icon */}
                   <div className={`w-10 h-10 rounded-full ${cfg.bg} flex items-center justify-center flex-shrink-0 mt-0.5`}>
@@ -180,7 +202,7 @@ function Notifications() {
                   <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-all">
                     {!n.read && (
                       <button
-                        onClick={() => markOneRead(n._id)}
+                        onClick={(e) => { e.stopPropagation(); markOneRead(n._id); }}
                         title="Mark as read"
                         className="p-1.5 rounded-lg hover:bg-surface-container text-on-surface-variant hover:text-primary transition-all"
                       >
@@ -188,7 +210,7 @@ function Notifications() {
                       </button>
                     )}
                     <button
-                      onClick={() => deleteOne(n._id)}
+                      onClick={(e) => { e.stopPropagation(); deleteOne(n._id); }}
                       title="Delete"
                       className="p-1.5 rounded-lg hover:bg-error-container text-on-surface-variant hover:text-error transition-all"
                     >

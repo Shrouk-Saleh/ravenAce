@@ -95,7 +95,7 @@ const validateSecureSession = async (req, res, next) => {
     const expiresIn = `${examDurationMinutes + 5}m`;
 
     const newJwt = jwt.sign(
-      { id: attempt.student.toString() },
+      { id: attempt.student.toString(), sessionType: "electron-locked" },
       process.env.JWT_SECRET,
       { expiresIn }
     );
@@ -176,7 +176,7 @@ const secureHeartbeat = async (req, res, next) => {
     const { attemptId } = req.body;
     
     await Attempt.updateOne(
-      { _id: attemptId, student: req.user._id },
+      { _id: attemptId, student: req.user._id, status: "in-progress" },
       { $set: { lastSeen: new Date() } }
     );
 

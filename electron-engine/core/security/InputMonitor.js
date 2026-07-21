@@ -20,6 +20,7 @@ class InputMonitor extends BaseMonitor {
     this.config = config;
     this.clipboardInterval = null;
     this.lastClipboardText = '';
+    this._handleBeforeInputEvent = this._handleBeforeInputEvent.bind(this);
   }
 
   start() {
@@ -33,6 +34,8 @@ class InputMonitor extends BaseMonitor {
       clipboard.clear();
       this.lastClipboardText = '';
     }
+
+    this.mainWindow.webContents.on('before-input-event', this._handleBeforeInputEvent);
     
     this.isRunning = true;
     console.log('[InputMonitor] Started.');
@@ -47,6 +50,8 @@ class InputMonitor extends BaseMonitor {
       clearInterval(this.clipboardInterval);
       this.clipboardInterval = null;
     }
+
+    this.mainWindow.webContents.removeListener('before-input-event', this._handleBeforeInputEvent);
     
     this.isRunning = false;
     console.log('[InputMonitor] Stopped.');
@@ -105,6 +110,20 @@ class InputMonitor extends BaseMonitor {
         this.lastClipboardText = '';
       }
     }, 1000);
+  }
+
+  _handleBeforeInputEvent(event, input) {
+    if (input.type === 'keyDown' && (input.key === 'Meta' || input.key === 'Super' || input.key === 'OS')) {
+      event.preventDefault();
+      this.reportViolation({
+        eventType: 'shortcut_blocked',
+        severity: 'critical',
+        metadata: { 
+          description: `Blocked Windows/Meta key used.`,
+          shortcutKey: input.key
+        }
+      });
+    }
   }
 }
 

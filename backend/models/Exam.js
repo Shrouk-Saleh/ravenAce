@@ -40,6 +40,12 @@ const examSchema = new mongoose.Schema(
     // Questions stored as ObjectId references — not embedded.
     // This allows the same question to appear in multiple exams (question bank).
     questions: [{ type: mongoose.Schema.Types.ObjectId, ref: "Question" }],
+
+    securityMode: {
+      type: String,
+      enum: ["browser", "lockdown"],
+      default: "browser",
+    },
   },
   { timestamps: true }
 );

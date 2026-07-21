@@ -27,13 +27,32 @@ const secureSessionRoutes = require("./routes/secureSessionRoutes");
 const app = express();
 connectDB();
 
+// ── Startup env-var validation ───────────────────────────────────
+// Warn loudly if any Stripe key is missing so issues surface at boot,
+// not silently at runtime when a user tries to subscribe.
+const REQUIRED_ENV = [
+  "JWT_SECRET",
+  "STRIPE_SECRET_KEY",
+  "STRIPE_WEBHOOK_SECRET",
+  "STRIPE_STANDARD_PRICE_ID",
+  "STRIPE_PREMIUM_PRICE_ID",
+  "FRONTEND_URL",
+];
+const missingEnv = REQUIRED_ENV.filter((key) => !process.env[key]);
+if (missingEnv.length > 0) {
+  console.warn(
+    `⚠️  Missing required environment variables: ${missingEnv.join(", ")}\n` +
+    `   Some features (e.g. Stripe payments) will not work correctly.`
+  );
+}
+
 app.use(helmet({
   crossOriginResourcePolicy: false,
 }));
 app.use(cors({
   origin: [
     process.env.FRONTEND_URL || "http://localhost:5173",
-    process.env.ELECTRON_ORIGIN || "ravenace://"
+    process.env.ELECTRON_ORIGIN || "app://-"
   ],
   credentials: true,
 }));
@@ -47,8 +66,9 @@ app.use(express.json());
 app.use(mongoSanitize());
 
 const { apiLimiter } = require("./middleware/rateLimiter");
+const { protect } = require("./middleware/authMiddleware");
 app.use("/api", apiLimiter);
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use("/uploads", protect, express.static(path.join(__dirname, "uploads")));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
@@ -67,6 +87,18 @@ app.use("/api/stripe", stripeRoutes);
 app.use("/api/secure-session", secureSessionRoutes);
 
 app.use(globalErrorHandler);
+
+// ── Serve React frontend in production ──────────────────────────
+// When deployed (e.g. HuggingFace / Railway / Render), the frontend
+// is pre-built into ../frontend/dist and served from Express directly.
+if (process.env.NODE_ENV === "production") {
+  const frontendDist = path.join(__dirname, "..", "frontend", "dist");
+  app.use(express.static(frontendDist));
+  // SPA fallback — let React Router handle all non-API routes
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(frontendDist, "index.html"));
+  });
+}
 
 const server = http.createServer(app);
 initSocket(server);

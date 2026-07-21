@@ -95,10 +95,6 @@ contextBridge.exposeInMainWorld('ravenAPI', {
     ipcRenderer.on('raven:security:violation-warning', (_event, violation) => callback(violation));
   },
 
-  // Listen for forced submission events
-  onForcedSubmit: (callback) => {
-    ipcRenderer.on('raven:exam:forced-submit', (_event, data) => callback(data));
-  },
 
   // ── App Lifecycle ───────────────────────────────────────────────────────
   // Receive the initialization signal (with token or error)

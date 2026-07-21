@@ -9,10 +9,11 @@
     "enabled": true
   },
   "display": {
-    "enabled": true
+    "enabled": true,
+    "allowedMonitors": 1
   },
   "input": {
-    "blocklist": ["PrintScreen", "CommandOrControl+Shift+I", "F12", "CommandOrControl+R", "CommandOrControl+Shift+R", "CommandOrControl+W", "CommandOrControl+N", "CommandOrControl+T", "CommandOrControl+L", "Alt+F4", "Meta+D"],
+    "blocklist": ["PrintScreen", "CommandOrControl+Shift+I", "F12", "CommandOrControl+R", "CommandOrControl+Shift+R", "CommandOrControl+W", "CommandOrControl+N", "CommandOrControl+T", "CommandOrControl+L", "Alt+F4", "Meta+D", "CommandOrControl+Shift+Esc", "Super+Shift+S"],
     "allowlist": [],
     "softBlock": ["Alt+Tab", "Meta", "Meta+Tab"]
   },

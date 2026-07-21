@@ -152,8 +152,31 @@ function ExamInterface() {
     await flushPendingSaves()
 
     try {
-      await api.post(`/attempts/${attemptId}/submit`, { timedOut })
-      navigate(`/results/${attemptId}`)
+      const res = await api.post(`/attempts/${attemptId}/submit`, { timedOut })
+      
+      if (res.status === 202) {
+        setAttempt(prev => ({ ...prev, status: 'grading' }))
+        
+        const pollInterval = setInterval(async () => {
+          try {
+            const statusRes = await api.get(`/attempts/${attemptId}/status`)
+            const currentStatus = statusRes.data.data.status
+            if (currentStatus === 'submitted' || currentStatus === 'auto-submitted' || currentStatus === 'timed-out') {
+              clearInterval(pollInterval)
+              navigate(`/results/${attemptId}`)
+            } else if (currentStatus === 'error') {
+              clearInterval(pollInterval)
+              setError('AI Grading failed. Please try submitting again or contact your instructor.')
+              setAttempt(prev => ({ ...prev, status: 'in-progress' }))
+              setSubmitting(false)
+            }
+          } catch (e) {
+            console.error('Status poll failed:', e)
+          }
+        }, 3000)
+      } else {
+        navigate(`/results/${attemptId}`)
+      }
     } catch (err) {
       console.error('Submit failed:', err)
       setSubmitting(false)
@@ -321,6 +344,20 @@ function ExamInterface() {
         <div className="text-center">
           <FaSpinner className="text-primary animate-spin text-[48px] block mx-auto mb-4" />
           <p className="text-body-lg text-on-surface-variant">Loading exam...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (attempt?.status === 'grading') {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center max-w-sm px-4">
+          <FaSpinner className="text-primary animate-spin text-[64px] block mx-auto mb-6" />
+          <h2 className="text-h2 text-on-surface mb-2">Grading in Progress</h2>
+          <p className="text-body-lg text-on-surface-variant">
+            Please wait while the AI evaluates your exam. This may take a minute.
+          </p>
         </div>
       </div>
     )

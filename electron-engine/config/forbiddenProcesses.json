@@ -1,3 +1,12 @@
 {
-  "processes": []
+  "processes": [
+    "obs32.exe",
+    "obs64.exe",
+    "Zoom.exe",
+    "TeamViewer.exe",
+    "AnyDesk.exe",
+    "Discord.exe",
+    "cheatengine-x86_64.exe",
+    "cheatengine-i386.exe"
+  ]
 }

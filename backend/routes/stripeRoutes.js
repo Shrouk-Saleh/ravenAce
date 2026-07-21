@@ -12,8 +12,9 @@ const { loadOrganization } = require("../middleware/orgMiddleware");
 const router = express.Router();
 
 // ── Webhook Route ────────────────────────────────────────────────
-// MUST be raw body. The server.js configuration ensures express.raw() is used for this route.
-router.post("/webhook", express.raw({ type: "application/json" }), handleWebhook);
+// MUST be raw body. server.js registers express.raw() for this path BEFORE express.json(),
+// so no need to apply it again here — doing so would double-wrap and break sig verification.
+router.post("/webhook", handleWebhook);
 
 // ── Protected Organization Routes ────────────────────────────────
 router.use(protect, authorize("organization"), loadOrganization);

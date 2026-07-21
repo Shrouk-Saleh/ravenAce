@@ -73,14 +73,14 @@ function Sidebar() {
     // new-exam notification is created for this user.
     const onNewNotification = (notif) => {
       setUnread(c => c + 1)
-      setToast(notif.message)
+      setToast(notif)
       setTimeout(() => setToast(null), 5000)
     }
     // Broadcast version — sent to ALL students when an exam is published
     const onNewExam = (data) => {
       if (user?.role === 'student') {
         setUnread(c => c + 1)
-        setToast(data.message)
+        setToast({ type: 'new-exam', message: data.message, refId: data.refId || data.examId })
         setTimeout(() => setToast(null), 5000)
       }
     }
@@ -251,10 +251,21 @@ function Sidebar() {
 
       {/* Real-time notification toast */}
       {toast && (
-        <div className="fixed top-4 right-4 z-[60] max-w-sm bg-surface-container-lowest border border-outline-variant rounded-xl shadow-lg p-4 flex items-start gap-3 animate-[fadeIn_0.2s_ease-out]">
+        <div 
+          onClick={() => {
+            if (toast.type === 'result' && toast.refId) navigate(`/results/${toast.refId}`);
+            else if (toast.type === 'certificate') navigate('/certificates');
+            else if (toast.type === 'new-exam' && toast.refId) navigate(`/exams/${toast.refId}`);
+            setToast(null);
+          }}
+          className="fixed top-4 right-4 z-[60] max-w-sm bg-surface-container-lowest border border-outline-variant rounded-xl shadow-lg p-4 flex items-start gap-3 animate-[fadeIn_0.2s_ease-out] cursor-pointer hover:bg-surface-container-low transition-colors"
+        >
           <span className="material-symbols-outlined text-primary text-[22px] flex-shrink-0">notifications_active</span>
-          <p className="text-label-md text-on-surface flex-1">{toast}</p>
-          <button onClick={() => setToast(null)} className="text-on-surface-variant hover:text-on-surface flex-shrink-0">
+          <p className="text-label-md text-on-surface flex-1">{toast.message || toast}</p>
+          <button 
+            onClick={(e) => { e.stopPropagation(); setToast(null); }} 
+            className="text-on-surface-variant hover:text-on-surface flex-shrink-0"
+          >
             <span className="material-symbols-outlined text-[18px]">close</span>
           </button>
         </div>

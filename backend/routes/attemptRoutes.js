@@ -8,6 +8,7 @@ const {
   logCheatEvent,
   getViolations,
   abandonAttempt,
+  getAttemptStatus,
 } = require("../controllers/attemptController");
 const { protect, authorize } = require("../middleware/authMiddleware");
 
@@ -27,6 +28,7 @@ router.post("/:id/submit", authorize("student"), submitExam);
 router.post("/:id/cheat-event", authorize("student"), logCheatEvent);
 router.post("/:id/abandon", authorize("student"), abandonAttempt);
 
+router.get("/:id/status", authorize("student"), getAttemptStatus);
 router.get("/:id", authorize("student"), getAttemptResult);
 router.get("/:id/violations", authorize("instructor", "admin"), getViolations);
 

@@ -246,13 +246,15 @@ const updateInstructor = async (req, res, next) => {
     if (!user) return next(new AppError("Instructor not found.", 404));
 
     const { name, email } = req.body;
-    if (name) user.name = name;
-    if (email) user.email = email;
-    await user.save({ validateBeforeSave: false });
+    const updates = {};
+    if (name) updates.name = name;
+    if (email) updates.email = email;
+
+    const updatedUser = await User.findByIdAndUpdate(user._id, updates, { new: true, runValidators: true });
 
     res.status(200).json({
       status: "success",
-      data: { instructor: user },
+      data: { instructor: updatedUser },
     });
   } catch (err) {
     next(err);
@@ -271,13 +273,13 @@ const toggleInstructorActive = async (req, res, next) => {
     });
     if (!user) return next(new AppError("Instructor not found.", 404));
 
-    user.isActive = !user.isActive;
-    await user.save({ validateBeforeSave: false });
+    const updatedIsActive = !user.isActive;
+    await User.updateOne({ _id: user._id }, { isActive: updatedIsActive });
 
     res.status(200).json({
       status: "success",
-      message: `Instructor ${user.isActive ? "activated" : "deactivated"}.`,
-      data: { isActive: user.isActive },
+      message: `Instructor ${updatedIsActive ? "activated" : "deactivated"}.`,
+      data: { isActive: updatedIsActive },
     });
   } catch (err) {
     next(err);
@@ -336,9 +338,11 @@ const resendInstructorInvite = async (req, res, next) => {
     const rawToken = crypto.randomBytes(32).toString("hex");
     const hashedToken = crypto.createHash("sha256").update(rawToken).digest("hex");
 
-    user.invitationToken = hashedToken;
-    user.invitationExpires = Date.now() + 7 * 24 * 60 * 60 * 1000;
-    await user.save({ validateBeforeSave: false });
+    const expires = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    await User.updateOne(
+      { _id: user._id },
+      { invitationToken: hashedToken, invitationExpires: expires }
+    );
 
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
     const activationUrl = `${frontendUrl}/activate?token=${rawToken}`;
@@ -471,13 +475,15 @@ const updateStudent = async (req, res, next) => {
     if (!user) return next(new AppError("Student not found.", 404));
 
     const { name, email } = req.body;
-    if (name) user.name = name;
-    if (email) user.email = email;
-    await user.save({ validateBeforeSave: false });
+    const updates = {};
+    if (name) updates.name = name;
+    if (email) updates.email = email;
+
+    const updatedUser = await User.findByIdAndUpdate(user._id, updates, { new: true, runValidators: true });
 
     res.status(200).json({
       status: "success",
-      data: { student: user },
+      data: { student: updatedUser },
     });
   } catch (err) {
     next(err);
@@ -496,13 +502,13 @@ const toggleStudentActive = async (req, res, next) => {
     });
     if (!user) return next(new AppError("Student not found.", 404));
 
-    user.isActive = !user.isActive;
-    await user.save({ validateBeforeSave: false });
+    const updatedIsActive = !user.isActive;
+    await User.updateOne({ _id: user._id }, { isActive: updatedIsActive });
 
     res.status(200).json({
       status: "success",
-      message: `Student ${user.isActive ? "activated" : "deactivated"}.`,
-      data: { isActive: user.isActive },
+      message: `Student ${updatedIsActive ? "activated" : "deactivated"}.`,
+      data: { isActive: updatedIsActive },
     });
   } catch (err) {
     next(err);
@@ -562,9 +568,11 @@ const resendStudentInvite = async (req, res, next) => {
     const rawToken = crypto.randomBytes(32).toString("hex");
     const hashedToken = crypto.createHash("sha256").update(rawToken).digest("hex");
 
-    user.invitationToken = hashedToken;
-    user.invitationExpires = Date.now() + 7 * 24 * 60 * 60 * 1000;
-    await user.save({ validateBeforeSave: false });
+    const expires = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    await User.updateOne(
+      { _id: user._id },
+      { invitationToken: hashedToken, invitationExpires: expires }
+    );
 
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
     const activationUrl = `${frontendUrl}/activate?token=${rawToken}`;

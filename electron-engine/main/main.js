@@ -16,11 +16,14 @@ protocol.registerSchemesAsPrivileged([
 
 app.on('ready', () => {
   const { session } = require('electron');
+  const backendUrl = process.env.RAVENACE_BACKEND_URL || appConfig.backend.baseUrl;
+  const backendWsUrl = backendUrl.replace(/^http/, 'ws');
+  
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
         ...details.responseHeaders,
-        'Content-Security-Policy': ["default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' http://localhost:5000 ws://localhost:5000"]
+        'Content-Security-Policy': [`default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' ${backendUrl} ${backendWsUrl}`]
       }
     });
   });
@@ -271,7 +274,7 @@ app.on('second-instance', (_event, argv) => {
   if (url && mainWindow) {
     const parsed = ProtocolHandler.parse(url);
     if (parsed.valid) {
-      console.log('[main.js] Valid token extracted:', parsed.token);
+      console.log('[main.js] Valid token extracted.');
       mainWindow.webContents.send('raven:app:init', { token: parsed.token });
     } else {
       console.log('[main.js] Invalid token:', parsed.error);

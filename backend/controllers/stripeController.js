@@ -160,8 +160,12 @@ const handleWebhook = async (req, res) => {
         org.stripeSubscriptionId = subscription.id;
         org.subscriptionPlan = plan;
         org.subscriptionStatus = subscription.status; // "active" or "trialing"
-        org.subscriptionStartDate = new Date(subscription.current_period_start * 1000);
-        org.subscriptionEndDate = new Date(subscription.current_period_end * 1000);
+        if (subscription.current_period_start) {
+          org.subscriptionStartDate = new Date(subscription.current_period_start * 1000);
+        }
+        if (subscription.current_period_end) {
+          org.subscriptionEndDate = new Date(subscription.current_period_end * 1000);
+        }
         org.maxStudents = maxStudents;
         org.maxInstructors = maxInstructors;
         
@@ -191,8 +195,12 @@ const handleWebhook = async (req, res) => {
 
         org.subscriptionPlan = plan;
         org.subscriptionStatus = subscription.status;
-        org.subscriptionStartDate = new Date(subscription.current_period_start * 1000);
-        org.subscriptionEndDate = new Date(subscription.current_period_end * 1000);
+        if (subscription.current_period_start) {
+          org.subscriptionStartDate = new Date(subscription.current_period_start * 1000);
+        }
+        if (subscription.current_period_end) {
+          org.subscriptionEndDate = new Date(subscription.current_period_end * 1000);
+        }
         
         // If it's canceling at period end, status is still 'active', but we could note it
         // If canceled immediately, status becomes 'canceled'

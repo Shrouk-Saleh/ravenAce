@@ -49,7 +49,7 @@ class FocusMonitor extends BaseMonitor {
   _handleBlur() {
     this.reportViolation({
       eventType: 'focus_lost',
-      severity: 'critical',
+      severity: this.config.violations?.focusLost?.severity || 'medium',
       metadata: { description: 'Exam window lost focus. Auto-submitting.' }
     });
 
@@ -66,7 +66,7 @@ class FocusMonitor extends BaseMonitor {
   _handleLeaveFullScreen() {
     this.reportViolation({
       eventType: 'fullscreen_exited',
-      severity: 'critical',
+      severity: this.config.violations?.fullscreenExited?.severity || 'high',
       metadata: { description: 'Exam window exited full-screen mode. Auto-submitting.' }
     });
 

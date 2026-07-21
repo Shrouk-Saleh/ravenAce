@@ -83,6 +83,7 @@ class ProcessMonitor extends BaseMonitor {
       }
       
       const lines = stdout.split('\n');
+      const reported = new Set();
       for (const line of lines) {
         if (!line.trim()) continue;
         // Extract process name (first CSV column)
@@ -90,11 +91,10 @@ class ProcessMonitor extends BaseMonitor {
         if (parts.length > 0) {
           let processName = parts[0].replace('"', '').toLowerCase();
           
-          if (this.blacklist.has(processName)) {
+          if (this.blacklist.has(processName) && !reported.has(processName)) {
+            reported.add(processName);
             const severity = this.blacklist.get(processName);
             this._handleForbiddenProcess(processName, severity);
-            // Don't report same process 100 times per scan
-            break; 
           }
         }
       }
@@ -110,16 +110,17 @@ class ProcessMonitor extends BaseMonitor {
       }
       
       const lines = stdout.split('\n');
+      const reported = new Set();
       for (const line of lines) {
         if (!line.trim()) continue;
         
         // Extract the executable name from the path
         const processName = line.trim().split('/').pop().toLowerCase();
         
-        if (this.blacklist.has(processName)) {
+        if (this.blacklist.has(processName) && !reported.has(processName)) {
+          reported.add(processName);
           const severity = this.blacklist.get(processName);
           this._handleForbiddenProcess(processName, severity);
-          break;
         }
       }
     });

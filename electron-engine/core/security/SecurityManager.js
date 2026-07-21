@@ -39,7 +39,7 @@ class SecurityManager {
 
   _initializeMonitors() {
     if (this.policy.features.focusTracking) {
-      this.monitors.push(new FocusMonitor(this.mainWindow, this.policy.focus));
+      this.monitors.push(new FocusMonitor(this.mainWindow, { ...this.policy.focus, violations: this.policy.violations }));
     }
     
     if (this.policy.features.displayTracking) {

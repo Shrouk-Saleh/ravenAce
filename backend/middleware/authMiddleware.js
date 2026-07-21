@@ -38,6 +38,9 @@ const protect = async (req, res, next) => {
     }
 
     req.user = user; // downstream controllers can read req.user._id, .role, etc.
+    if (decoded.sessionType) {
+      req.user.sessionType = decoded.sessionType;
+    }
     next();
   } catch (err) {
     return next(new AppError("Invalid or expired token. Please log in again.", 401));

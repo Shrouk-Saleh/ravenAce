@@ -148,7 +148,31 @@ const gradeAndScore = async (attempt, exam, timedOut = false) => {
     console.error("Notification failed:", notifErr.message);
   }
 
+  // Notify the instructor that a student submitted
+  try {
+    const studentUser = await require("../models/User").findById(attempt.student).select("name");
+    const studentName = studentUser?.name || "A student";
+    const cheatFlag = violationCount > 0 ? ` (${violationCount} violation(s) detected)` : "";
+    const instructorMsg = `${studentName} submitted "${exam.title}" — scored ${score}/${exam.totalScore}${cheatFlag}.`;
+    await createNotification(exam.instructor, "result", instructorMsg, attempt._id);
+  } catch (notifErr) {
+    console.error("Instructor notification failed:", notifErr.message);
+  }
+
   return { score, passed, correctCount, violationCount, totalPenalty, certificate };
+};
+
+// Async wrapper for gradeAndScore to handle background execution and errors
+const processBackgroundGrading = async (attempt, exam, timedOut) => {
+  try {
+    await gradeAndScore(attempt, exam, timedOut);
+  } catch (err) {
+    console.error("Background grading failed:", err.message);
+    await Attempt.updateOne(
+      { _id: attempt._id },
+      { $set: { status: "error" } }
+    );
+  }
 };
 // Extracted into its own function so both submitExam and logCheatEvent
 // use exactly the same grading logic — no duplication, no inconsistency.
@@ -253,6 +277,10 @@ const startExam = async (req, res, next) => {
 
     if (!exam || !exam.isPublished) {
       return next(new AppError("Exam not found or not published.", 404));
+    }
+
+    if (exam.securityMode === "lockdown" && req.user.sessionType !== "electron-locked") {
+      return next(new AppError("This exam requires the RavenACE Secure Engine.", 403));
     }
 
     // ── Multi-Tenant Security Check ────────────────────────────────────────
@@ -376,9 +404,15 @@ const saveAnswer = async (req, res, next) => {
       _id: req.params.id,
       student: req.user._id,
       status: "in-progress",
-    });
+    }).populate("exam");
 
-    if (!attempt) return next(new AppError("Active attempt not found.", 404));
+    if (!attempt) {
+      return next(new AppError("Active attempt not found.", 404));
+    }
+
+    if (attempt.exam.securityMode === "lockdown" && req.user.sessionType !== "electron-locked") {
+      return next(new AppError("This exam requires the RavenACE Secure Engine.", 403));
+    }
 
     const idx = attempt.savedAnswers.findIndex(
       (a) => a.question.toString() === questionId
@@ -431,28 +465,27 @@ const submitExam = async (req, res, next) => {
     const exam = await Exam.findById(attempt.exam).populate("questions");
     exam.questions = exam.questions.filter(Boolean);
 
-    // Run the shared grading logic
-    const { score, passed, correctCount, violationCount, totalPenalty, certificate } = 
-      await gradeAndScore(attempt, exam, req.body.timedOut);
+    if (exam.securityMode === "lockdown" && req.user.sessionType !== "electron-locked") {
+      await Attempt.updateOne(
+        { _id: req.params.id, status: "grading" },
+        { $set: { status: "in-progress" } }
+      );
+      return next(new AppError("This exam requires the RavenACE Secure Engine.", 403));
+    }
 
-    res.status(200).json({
+    // Run grading in the background without awaiting it
+    processBackgroundGrading(attempt, exam, req.body.timedOut);
+
+    res.status(202).json({
       status: "success",
-      message: "Exam submitted successfully.",
+      message: "Exam submitted. Grading is in progress.",
       data: {
         attemptId: attempt._id,
-        score,
-        passed,
-        timeTaken: attempt.timeTaken,
-        correctCount,
-        totalQuestions: exam.questions.length,
-        certificateId: certificate?._id || null,
-        violationCount,
-        penaltyApplied: totalPenalty
+        status: "grading"
       },
     });
   } catch (err) {
-    // If grading fails, try to revert the status so they can resubmit, 
-    // unless it failed deep inside save() where we might be stuck.
+    // Revert status on immediate failure before background task starts
     await Attempt.updateOne(
       { _id: req.params.id, status: "grading" },
       { $set: { status: "in-progress" } }
@@ -546,6 +579,20 @@ const logCheatEvent = async (req, res, next) => {
       return next(new AppError("Invalid event type.", 400));
     }
 
+    const attemptForCheck = await Attempt.findOne({
+      _id: req.params.id,
+      student: req.user._id,
+      status: "in-progress"
+    }).populate("exam");
+
+    if (!attemptForCheck) {
+      return next(new AppError("Active attempt not found.", 404));
+    }
+
+    if (attemptForCheck.exam.securityMode === "lockdown" && req.user.sessionType !== "electron-locked") {
+      return next(new AppError("This exam requires the RavenACE Secure Engine.", 403));
+    }
+
     // 1. Record the violation
     await CheatLog.create({
       attempt: req.params.id,
@@ -567,18 +614,25 @@ const logCheatEvent = async (req, res, next) => {
         const exam = await Exam.findById(attempt.exam).populate("questions");
         exam.questions = exam.questions.filter(Boolean);
 
-        const { score, passed, violationCount, totalPenalty } = 
-          await gradeAndScore(attempt, exam, false);
+        processBackgroundGrading(attempt, exam, false);
 
-        return res.status(200).json({
+        // Notify the instructor about the cheat auto-submit immediately
+        try {
+          const studentUser = await require("../models/User").findById(attempt.student).select("name");
+          const studentName = studentUser?.name || "A student";
+          const cheatMsg = `${studentName} was auto-submitted from "${exam.title}" due to ${total} security violation(s).`;
+          await createNotification(exam.instructor, "result", cheatMsg, attempt._id);
+        } catch (notifErr) {
+          console.error("Cheat instructor notification failed:", notifErr.message);
+        }
+
+        return res.status(202).json({
           status: "success",
-          message: "Attempt automatically submitted due to excessive cheating.",
+          autoSubmitted: true,
+          message: "Attempt automatically submitted due to excessive cheating. Grading in progress.",
           data: {
             attemptId: attempt._id,
-            score,
-            passed,
-            violationCount,
-            penaltyApplied: totalPenalty
+            status: "grading"
           },
         });
       }
@@ -653,6 +707,29 @@ const abandonAttempt = async (req, res, next) => {
   }
 };
 
+// ────────────────────────────────────────────────────────────────
+// @desc    Get the current grading status of an attempt
+// @route   GET /api/attempts/:id/status
+// @access  Student only (own attempts)
+// ────────────────────────────────────────────────────────────────
+const getAttemptStatus = async (req, res, next) => {
+  try {
+    const attempt = await Attempt.findOne({
+      _id: req.params.id,
+      student: req.user._id,
+    }).select("status");
+
+    if (!attempt) return next(new AppError("Attempt not found.", 404));
+
+    res.status(200).json({
+      status: "success",
+      data: { status: attempt.status },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   startExam,
   saveAnswer,
@@ -661,6 +738,7 @@ module.exports = {
   getAttemptHistory,
   logCheatEvent,
   getViolations,
+  getAttemptStatus,
   abandonAttempt,
   calculateScore,
 };

@@ -94,7 +94,7 @@ const attemptSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["in-progress", "submitted", "timed-out", "auto-submitted", "abandoned"],
+      enum: ["in-progress", "grading", "submitted", "timed-out", "auto-submitted", "abandoned", "error"],
       default: "in-progress",
     },
 
