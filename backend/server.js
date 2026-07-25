@@ -98,15 +98,18 @@ app.use("/api/stripe", stripeRoutes);
 app.use("/api/secure-session", secureSessionRoutes);
 
 // ── Serve React frontend in production ──────────────────────────
-// When deployed (e.g. HuggingFace / Railway / Render), the frontend
-// is pre-built into ../frontend/dist and served from Express directly.
-if (process.env.NODE_ENV === "production") {
-  const frontendDist = path.join(__dirname, "..", "frontend", "dist");
+// Serves the pre-built frontend whenever the dist folder exists,
+// regardless of NODE_ENV (handles Render's environment variable behavior).
+const frontendDist = path.join(__dirname, "..", "frontend", "dist");
+const fs = require("fs");
+if (fs.existsSync(path.join(frontendDist, "index.html"))) {
   app.use(express.static(frontendDist));
   // SPA fallback — let React Router handle all non-API routes
   app.get("*", (req, res) => {
     res.sendFile(path.join(frontendDist, "index.html"));
   });
+} else {
+  console.warn("⚠️  frontend/dist not found — running in API-only mode.");
 }
 
 app.use(globalErrorHandler);
