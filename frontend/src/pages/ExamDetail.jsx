@@ -183,7 +183,7 @@ function ExamDetail() {
                   <p className="text-label-sm text-on-surface-variant mb-3">Don't have the secure engine installed?</p>
                   
                   <a 
-                    href="https://github.com/Shrouk-Saleh/ravenAce/releases/download/v1.0.0/RavenACE.Secure.Engine.Setup.1.0.0.exe"
+                    href="https://github.com/Shrouk-Saleh/ravenAce/releases/download/v1.0.0/RavenACE-Secure-Engine-Windows.zip"
                     className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-surface-container-highest text-on-surface rounded hover:bg-surface-container-high transition-colors text-sm font-medium w-full"
                   >
                     <span className="material-symbols-outlined text-[18px]">download</span>
