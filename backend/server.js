@@ -48,6 +48,17 @@ if (missingEnv.length > 0) {
 
 app.use(helmet({
   crossOriginResourcePolicy: false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      imgSrc: ["'self'", "data:", "blob:", "https:"],
+      connectSrc: ["'self'", "https:", "wss:"],
+      workerSrc: ["'self'", "blob:"],
+    },
+  },
 }));
 app.use(cors({
   origin: [
@@ -86,8 +97,6 @@ app.use("/api/organization", organizationRoutes);
 app.use("/api/stripe", stripeRoutes);
 app.use("/api/secure-session", secureSessionRoutes);
 
-app.use(globalErrorHandler);
-
 // ── Serve React frontend in production ──────────────────────────
 // When deployed (e.g. HuggingFace / Railway / Render), the frontend
 // is pre-built into ../frontend/dist and served from Express directly.
@@ -99,6 +108,8 @@ if (process.env.NODE_ENV === "production") {
     res.sendFile(path.join(frontendDist, "index.html"));
   });
 }
+
+app.use(globalErrorHandler);
 
 const server = http.createServer(app);
 initSocket(server);
