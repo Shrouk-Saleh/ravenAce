@@ -4,7 +4,7 @@ import axios from 'axios'
 // It reads the token from localStorage and attaches it automatically
 // so every page doesn't have to do it manually.
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api',
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
 })
 
 api.interceptors.request.use((config) => {

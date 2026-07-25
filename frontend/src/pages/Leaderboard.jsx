@@ -55,7 +55,7 @@ function Leaderboard() {
                     ${isFirst ? 'pb-8 scale-105' : ''}`}>
                   <div className={`w-12 h-12 rounded-full bg-primary-container flex items-center justify-center`}>
                     {entry.profilePhoto
-                      ? <img src={entry.profilePhoto.startsWith('http') ? entry.profilePhoto : `http://localhost:5000${entry.profilePhoto}`} className="w-12 h-12 rounded-full object-cover" alt="" />
+                      ? <img src={entry.profilePhoto.startsWith('http') ? entry.profilePhoto : `${window.location.origin}${entry.profilePhoto}`} className="w-12 h-12 rounded-full object-cover" alt="" />
                       : <span className="material-symbols-outlined text-on-primary-container text-[22px]">person</span>
                     }
                   </div>
