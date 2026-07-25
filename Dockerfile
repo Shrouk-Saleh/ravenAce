@@ -27,7 +27,7 @@ COPY frontend/ ./frontend/
 # ── Build the React frontend ──────────────────────────────────────
 # Vite reads VITE_ env vars at BUILD time from the environment.
 # Set VITE_API_URL in HF Space Secrets to your Space URL.
-RUN cd frontend && npm run build
+RUN cd frontend && npx vite build
 
 # ── Runtime configuration ─────────────────────────────────────────
 # HuggingFace Docker Spaces require port 7860
