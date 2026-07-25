@@ -245,8 +245,9 @@ const activateAccount = async (req, res, next) => {
 // ────────────────────────────────────────────────────────────────
 const forgotPassword = async (req, res, next) => {
   try {
-    const { email } = req.body;
+    let { email } = req.body;
     if (!email) return next(new AppError("Please provide your email.", 400));
+    email = email.trim().toLowerCase();
 
     const user = await User.findOne({ email });
 
