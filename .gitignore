@@ -16,6 +16,8 @@ electron-engine/dist/
 # Environment
 .env
 .env.*
+!.env.example          # example templates are safe — never ignore these
+!**/.env.example
 
 # Logs
 *.log
