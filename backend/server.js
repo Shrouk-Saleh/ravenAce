@@ -71,7 +71,7 @@ app.use(cors({
 // Stripe webhook must use raw body before express.json() parses it
 app.use("/api/stripe/webhook", express.raw({ type: "application/json" }));
 
-app.use(express.json());
+app.use(express.json({ limit: '10kb' }));
 // Sanitize all request bodies, params, and query strings.
 // Strips out any keys starting with '$' or containing '.' to prevent NoSQL injection.
 app.use(mongoSanitize());
@@ -80,6 +80,9 @@ const { apiLimiter } = require("./middleware/rateLimiter");
 const { protect } = require("./middleware/authMiddleware");
 app.use("/api", apiLimiter);
 app.use("/uploads", protect, express.static(path.join(__dirname, "uploads")));
+
+// ── Health check — used by Render, Docker, and load balancers ───
+app.get("/health", (req, res) => res.json({ status: "ok", uptime: process.uptime() }));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);

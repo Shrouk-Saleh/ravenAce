@@ -11,3 +11,8 @@ frontend/dist
 .gitignore
 *.log
 electron-engine/
+
+# Exclude environment secrets — NEVER bake these into a Docker image
+**/.env
+**/.env.*
+!**/.env.example

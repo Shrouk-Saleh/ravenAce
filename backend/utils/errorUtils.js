@@ -52,6 +52,13 @@ const globalErrorHandler = (err, req, res, next) => {
     err.statusCode = 400;
   }
 
+  // In production, never expose internal details of unexpected crashes.
+  // Only operational errors (AppError) with isOperational=true get their real message.
+  if (!err.isOperational && process.env.NODE_ENV === "production") {
+    console.error("💥 UNEXPECTED ERROR:", err); // log the real error server-side
+    return res.status(500).json({ status: "error", message: "Something went wrong. Please try again later." });
+  }
+
   res.status(err.statusCode).json({
     status: err.status || "error",
     message: err.message,
