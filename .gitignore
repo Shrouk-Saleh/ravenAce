@@ -17,3 +17,7 @@ electron-engine/dist/
 
 # Logs
 *.log
+
+# Keys
+*.pem
+*.pem.dev
