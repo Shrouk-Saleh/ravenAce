@@ -117,7 +117,7 @@ function createSecureWindow() {
     minHeight: appConfig.window.minHeight,
     fullscreen: true,
     fullscreenable: true,
-    resizable: false,
+    resizable: true, // MUST be true on Windows to allow fullscreen API to work
     minimizable: false,
     closable: false, 
     frame: false, 
