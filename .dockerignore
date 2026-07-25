@@ -1,0 +1,13 @@
+# Exclude node_modules — Docker installs Linux-compatible ones from scratch
+node_modules
+**/node_modules
+
+# Exclude build output
+frontend/dist
+**/dist
+
+# Exclude dev files
+.git
+.gitignore
+*.log
+electron-engine/
