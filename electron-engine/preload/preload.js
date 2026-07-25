@@ -15,6 +15,12 @@
 //   - ipcRenderer.send() for one-way messages TO main
 //   - Never expose ipcRenderer directly
 //   - Never expose require, process, or any Node global
+//
+// SECURITY ARCHITECTURE NOTE:
+// The Renderer process is considered UNTRUSTED. 
+// - No security decisions are made here.
+// - All IPC messages sent to the Main process are validated and sanitized.
+// - State (like timer, violation count, exam data) is authoritative only in the Main process.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const { contextBridge, ipcRenderer } = require('electron');

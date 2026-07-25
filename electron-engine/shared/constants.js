@@ -83,6 +83,19 @@ const VIOLATION_EVENTS = {
   HEARTBEAT_FAILED: 'heartbeat_failed',
   DEVTOOLS_ATTEMPT: 'devtools_attempt',
   SCREEN_CAPTURE_ATTEMPT: 'screen_capture_attempt',
+  VM_DETECTED: 'vm_detected',
+  SCREEN_RECORDER_DETECTED: 'screen_recorder_detected',
+  PROCESS_KILLED: 'process_killed',
+  DEBUGGER_DETECTED: 'debugger_detected',
+  INSPECTOR_DETECTED: 'inspector_detected',
+  PROXY_DETECTED: 'proxy_detected',
+  CONFIG_TAMPERED: 'config_tampered',
+  DISPLAY_HOT_PLUG: 'display_hot_plug',
+  DISPLAY_REMOVED: 'display_removed',
+  DISPLAY_METRICS_CHANGED: 'display_metrics_changed',
+  RDP_DETECTED: 'rdp_detected',
+  VIRTUAL_DISPLAY_DETECTED: 'virtual_display_detected',
+  RENAMED_PROCESS_DETECTED: 'renamed_process_detected',
 };
 
 /**

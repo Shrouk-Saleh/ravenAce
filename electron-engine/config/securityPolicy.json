@@ -3,22 +3,54 @@
     "focusTracking": true,
     "displayTracking": true,
     "inputBlocking": true,
-    "processScanning": true
+    "processScanning": true,
+    "vmDetection": true,
+    "screenRecordingDetection": true,
+    "processKilling": true,
+    "antiDebugging": true,
+    "networkMonitoring": true,
+    "configIntegrity": true,
+    "strictKiosk": true
+  },
+  "kiosk": {
+    "enabled": true,
+    "killExplorerOnWindows": true
   },
   "focus": {
-    "enabled": true
+    "enabled": true,
+    "reclaimIntervalSeconds": 2
   },
   "display": {
     "enabled": true,
-    "allowedMonitors": 1
+    "allowedMonitors": 1,
+    "pollIntervalSeconds": 5,
+    "detectRdp": true,
+    "detectVirtualDisplays": true
   },
   "input": {
-    "blocklist": ["PrintScreen", "CommandOrControl+Shift+I", "F12", "CommandOrControl+R", "CommandOrControl+Shift+R", "CommandOrControl+W", "CommandOrControl+N", "CommandOrControl+T", "CommandOrControl+L", "Alt+F4", "Meta+D", "CommandOrControl+Shift+Esc", "Super+Shift+S"],
+    "blocklist": ["PrintScreen", "CommandOrControl+Shift+I", "F12", "CommandOrControl+R", "CommandOrControl+Shift+R", "CommandOrControl+W", "CommandOrControl+N", "CommandOrControl+T", "CommandOrControl+L", "Alt+F4", "Meta+D", "CommandOrControl+Shift+Esc", "Super+Shift+S", "CommandOrControl+Shift+S", "Super+G", "Super+Alt+R", "Super+PrintScreen", "Super+Shift+S", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "CommandOrControl+P", "CommandOrControl+S", "CommandOrControl+U", "CommandOrControl+G", "CommandOrControl+F5", "CommandOrControl+Shift+P"],
     "allowlist": [],
-    "softBlock": ["Alt+Tab", "Meta", "Meta+Tab"]
+    "softBlock": ["Alt+Tab", "Meta", "Meta+Tab", "Super"]
   },
   "process": {
-    "forbiddenList": "forbiddenProcesses.json"
+    "forbiddenList": "forbiddenProcesses.json",
+    "scanIntervalSeconds": 1,
+    "killOnDetect": true,
+    "blockOnVm": true,
+    "vmConfidenceThreshold": 60,
+    "useWmiEvents": true,
+    "peMetadataCheckInterval": 5,
+    "gracefulKillTimeoutMs": 1000
+  },
+  "network": {
+    "detectProxy": true,
+    "detectProxyTools": true,
+    "certPinning": {
+      "enabled": false,
+      "fingerprint": null,
+      "_NOTE": "Set 'enabled' to true and provide the SHA-256 fingerprint of your backend TLS certificate."
+    },
+    "scanIntervalSeconds": 10
   },
   "heartbeat": {
     "intervalSeconds": 15,
@@ -31,15 +63,24 @@
     "maxOfflineBuffer": 50
   },
   "violations": {
-    "focusLost": { "severity": "medium", "enabled": true },
-    "fullscreenExited": { "severity": "high", "enabled": true },
-    "clipboardUsed": { "severity": "medium", "enabled": true },
+    "focusLost": { "severity": "low", "enabled": true },
+    "fullscreenExited": { "severity": "low", "enabled": true },
+    "clipboardUsed": { "severity": "low", "enabled": true },
     "windowMinimized": { "severity": "low", "enabled": true },
-    "secondMonitor": { "severity": "high", "enabled": true },
-    "forbiddenProcess": { "severity": "critical", "enabled": true },
-    "shortcutBlocked": { "severity": "medium", "enabled": true },
-    "devtoolsAttempt": { "severity": "critical", "enabled": true },
-    "screenCaptureAttempt": { "severity": "critical", "enabled": true }
+    "secondMonitor": { "severity": "low", "enabled": true },
+    "forbiddenProcess": { "severity": "low", "enabled": true },
+    "shortcutBlocked": { "severity": "low", "enabled": true },
+    "devtoolsAttempt": { "severity": "low", "enabled": true },
+    "screenCaptureAttempt": { "severity": "low", "enabled": true },
+    "vmDetected": { "severity": "low", "enabled": true },
+    "screenRecorderDetected": { "severity": "low", "enabled": true },
+    "processKilled": { "severity": "low", "enabled": true },
+    "debuggerDetected": { "severity": "low", "enabled": true },
+    "proxyDetected": { "severity": "low", "enabled": true },
+    "configTampered": { "severity": "critical", "enabled": true },
+    "displayHotPlug": { "severity": "low", "enabled": true },
+    "rdpDetected": { "severity": "low", "enabled": true },
+    "inspectorDetected": { "severity": "low", "enabled": true }
   },
   "strikes": {
     "limits": {

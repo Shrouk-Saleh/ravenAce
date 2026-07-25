@@ -4,7 +4,12 @@
 //
 // All specific security monitors must inherit from this class and implement
 // start() and stop() methods.
+//
+// Every violation gets a unique violationId for audit trail cross-referencing.
 // ─────────────────────────────────────────────────────────────────────────────
+
+const { randomUUID } = require('crypto');
+const os = require('os');
 
 class BaseMonitor {
   constructor(name) {
@@ -17,32 +22,44 @@ class BaseMonitor {
   }
 
   /**
-   * Register a callback to be invoked when this monitor detects a violation.
+   * Register a callback to be invoked when this monitor detects evidence of risk.
    * @param {function(Object): void} callback
    */
-  onViolation(callback) {
+  onEvidence(callback) {
     if (typeof callback === 'function') {
       this.callbacks.push(callback);
     }
   }
 
   /**
-   * Internal method called by subclasses to report a detected violation.
+   * Internal method called by subclasses to report detected evidence of risk.
+   * Automatically enriches with evidenceId, source, timestamp, and user.
+   *
    * @param {Object} eventData
-   * @param {string} eventData.eventType - e.g. 'focus_lost', 'forbidden_process'
+   * @param {string} eventData.type - e.g. 'forbidden_process', 'timing_anomaly'
    * @param {string} eventData.severity - 'low', 'medium', 'high', 'critical'
-   * @param {Object} eventData.metadata - Additional context
+   * @param {number} [eventData.confidence] - 0.0 to 1.0 (defaults to 1.0)
+   * @param {number} [eventData.scoreOverride] - Direct point value override
+   * @param {Object} eventData.metadata - Additional context/evidence details
    * @protected
    */
-  reportViolation(eventData) {
-    const violation = {
+  reportEvidence(eventData) {
+    if (!eventData.metadata) eventData.metadata = {};
+    if (!eventData.metadata.timestamp) eventData.metadata.timestamp = Date.now();
+    if (!eventData.metadata.user) {
+      try { eventData.metadata.user = os.userInfo().username; } catch (e) { /* ignore */ }
+    }
+
+    const evidence = {
+      evidenceId: randomUUID(),
       source: this.name,
       timestamp: Date.now(),
+      confidence: 1.0, // Default
       ...eventData,
     };
     
     for (const callback of this.callbacks) {
-      callback(violation);
+      callback(evidence);
     }
   }
 

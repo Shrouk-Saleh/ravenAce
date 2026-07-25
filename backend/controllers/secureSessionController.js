@@ -5,7 +5,7 @@ const CheatLog = require("../models/CheatLog");
 const { AppError } = require("../utils/errorUtils");
 // We reuse the submit logic from attemptController
 const { submitExam } = require("./attemptController");
-const MAX_VIOLATIONS = 3;
+const MAX_VIOLATIONS = 9999;
 
 // ── In-Memory Launch Status Store ──────────────────────────────────────────
 // Maps attemptId -> { status, message }

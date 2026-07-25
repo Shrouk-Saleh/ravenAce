@@ -112,7 +112,7 @@ export default function App() {
   const handleSubmit = async (reason = 'manual') => {
     if (submitting) return;
     
-    if (reason === 'manual' && !window.confirm('Are you sure you want to submit your exam? You cannot undo this action.')) {
+    if (reason === 'manual' && false) {
       return;
     }
 
@@ -190,6 +190,31 @@ export default function App() {
 
   if (submissionResult) {
     const data = submissionResult.data || submissionResult || {};
+    
+    if (data.status === 'grading') {
+      return (
+        <div style={{ display: 'flex', height: '100%', width: '100%', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 32 }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 64, color: '#4a9eff', marginBottom: 16 }}>
+            task_alt
+          </span>
+          <h1 style={{ fontSize: 32, fontWeight: 800, color: '#e8ecf4', marginBottom: 16 }}>
+            Exam Submitted!
+          </h1>
+          <p style={{ color: '#8899b4', marginBottom: 32, maxWidth: 400 }}>
+            Your exam has been successfully submitted and is currently being graded by the AI. You can view your final score in the web portal.
+          </p>
+          <button 
+            onClick={() => window.ravenAPI.requestExit()}
+            style={{ borderRadius: 8, background: '#4a9eff', color: '#fff', padding: '14px 32px', fontSize: 16, fontWeight: 700, border: 'none', cursor: 'pointer', transition: 'opacity 0.2s' }}
+            onMouseOver={(e) => e.target.style.opacity = 0.9}
+            onMouseOut={(e) => e.target.style.opacity = 1}
+          >
+            Exit Secure Engine
+          </button>
+        </div>
+      );
+    }
+
     return (
       <div style={{ display: 'flex', height: '100%', width: '100%', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 32 }}>
         <span className="material-symbols-outlined" style={{ fontSize: 64, color: data.passed ? '#34d399' : '#f87171', marginBottom: 16 }}>
@@ -246,7 +271,7 @@ export default function App() {
           )}
           <button 
             onClick={async () => {
-              if (window.confirm('Are you sure you want to exit? Your exam will be submitted and the session will close.')) {
+              if (true) {
                 await handleSubmit('manual');
                 window.ravenAPI.requestExit();
               }

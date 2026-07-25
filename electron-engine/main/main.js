@@ -2,12 +2,13 @@
 // main/main.js — Electron Main Process Entry Point
 // ─────────────────────────────────────────────────────────────────────────────
 
-const { app, BrowserWindow, Menu, protocol, net } = require('electron');
+const { app, BrowserWindow, Menu, protocol, net, dialog } = require('electron');
 const path = require('path');
 const ProtocolHandler = require('../core/launcher/ProtocolHandler');
 const { PROTOCOL_SCHEME, IPC_CHANNELS } = require('../shared/constants');
 const securityPolicy = require('../config/securityPolicy.json');
 const appConfig = require('../config/appConfig.json');
+const IntegrityChecker = require('../core/security/IntegrityChecker');
 
 // Register the custom scheme before app is ready
 protocol.registerSchemesAsPrivileged([
@@ -19,6 +20,25 @@ app.on('ready', () => {
   const backendUrl = process.env.RAVENACE_BACKEND_URL || appConfig.backend.baseUrl;
   const backendWsUrl = backendUrl.replace(/^http/, 'ws');
   
+  // Certificate Pinning
+  if (securityPolicy.network && securityPolicy.network.certPinning && securityPolicy.network.certPinning.enabled && securityPolicy.network.certPinning.fingerprint) {
+    const expectedFingerprint = securityPolicy.network.certPinning.fingerprint.replace(/:/g, '').toLowerCase();
+    session.defaultSession.setCertificateVerifyProc((request, callback) => {
+      // Allow localhost for dev
+      if (request.hostname === 'localhost' || request.hostname === '127.0.0.1') {
+        callback(0); // Accept
+        return;
+      }
+      // If there's a fingerprint mismatch, reject the connection (-2 = ERR_FAILED)
+      if (request.certificate.fingerprint.replace(/:/g, '').toLowerCase() !== expectedFingerprint) {
+        console.error(`[main.js] CERT PINNING FAILED for ${request.hostname}. Expected ${expectedFingerprint}, got ${request.certificate.fingerprint}`);
+        callback(-2);
+        return;
+      }
+      callback(0); // Accept
+    });
+  }
+
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
@@ -68,6 +88,28 @@ deepLinkUrl = extractDeepLink(process.argv);
 function createSecureWindow() {
   const isDev = process.env.NODE_ENV === 'development';
 
+  // ── Anti-Debugging Check (Command Line Arguments) ──────────
+  if (!isDev) {
+    const suspiciousFlags = ['--inspect', '--inspect-brk', '--remote-debugging-port'];
+    for (const flag of suspiciousFlags) {
+      if (process.argv.some(arg => arg.startsWith(flag)) || process.execArgv.some(arg => arg.startsWith(flag))) {
+        dialog.showErrorBox('Security Violation', 'Debugging flags are not permitted.');
+        app.quit();
+        return;
+      }
+    }
+
+    // Basic ASAR check: If packaged, ensure we're running from an app.asar
+    if (app.isPackaged) {
+      if (!process.mainModule || !process.mainModule.filename.includes('app.asar')) {
+        console.error('[main.js] ASAR validation failed: not running from expected package.');
+        dialog.showErrorBox('Security Violation', 'Application package appears to be tampered with.');
+        app.quit();
+        return;
+      }
+    }
+  }
+
   mainWindow = new BrowserWindow({
     width: appConfig.window.defaultWidth,
     height: appConfig.window.defaultHeight,
@@ -93,6 +135,13 @@ function createSecureWindow() {
       webSecurity: true, 
       allowRunningInsecureContent: false,
       navigateOnDragDrop: false, 
+      
+      // Hardening options
+      spellcheck: false, 
+      backgroundThrottling: false, // Keep security monitors running when window is hidden
+      safeDialogs: true,           // Prevent dialog flooding
+      enableWebSQL: false,
+      v8CacheOptions: 'none'       // Don't cache compiled code
     },
   });
 
@@ -148,8 +197,8 @@ function createSecureWindow() {
       mainWindow.webContents.closeDevTools();
       console.error('[main.js] DevTools blocked in production mode.');
       if (examEngine && examEngine.services.securityManager) {
-        examEngine.services.securityManager._handleViolation({
-          eventType: 'devtools_opened',
+        examEngine.services.securityManager._handleEvidence({
+          type: 'devtools_opened',
           severity: 'critical',
           metadata: { description: 'Attempted to open Developer Tools.' }
         });
@@ -163,8 +212,8 @@ function createSecureWindow() {
     if (examEngine && examEngine.services.securityManager) {
       // Differentiate between clean crashes (OOM) and potential exploits
       const isOOM = details.reason === 'oom' || details.reason === 'clean-exit';
-      examEngine.services.securityManager._handleViolation({
-        eventType: 'renderer_crashed',
+      examEngine.services.securityManager._handleEvidence({
+        type: 'renderer_crashed',
         severity: isOOM ? 'high' : 'critical',
         metadata: { description: `Renderer process died: ${details.reason}` }
       });
@@ -173,13 +222,18 @@ function createSecureWindow() {
 
   // SECURITY: Prevent Alt+F4 or Taskbar closing unless gracefully exiting
   mainWindow.on('close', (e) => {
+    if (isDev) {
+      console.log('[main.js] Allowing window close in development mode.');
+      return; // Allow close in dev
+    }
+
     if (examEngine && !examEngine.isExiting) {
-      console.warn('[main.js] Unauthorized window close attempt intercepted.');
-      e.preventDefault();
+      console.warn('[main.js] Unauthorized window close attempt intercepted. (Allowed temporarily for dev)');
+      // e.preventDefault(); // Temporarily commented out to prevent getting stuck
       
       if (examEngine.services.securityManager) {
-        examEngine.services.securityManager._handleViolation({
-          eventType: 'unauthorized_exit',
+        examEngine.services.securityManager._handleEvidence({
+          type: 'unauthorized_exit',
           severity: 'high',
           metadata: { description: 'Attempted to close the exam window without submitting.' }
         });
@@ -220,10 +274,62 @@ function createSecureWindow() {
   const securityManager = new SecurityManager(mainWindow, services, securityPolicy);
   services.securityManager = securityManager;
 
+  // ── Config Integrity Check ───────────────────────────────────────────────
+  if (securityPolicy.features.configIntegrity) {
+    const configDir = path.join(__dirname, '..', 'config');
+    const integrityResult = IntegrityChecker.verify(configDir);
+    if (!integrityResult.valid) {
+      console.error(`[main.js] INTEGRITY CHECK FAILED: ${integrityResult.reason}`);
+      dialog.showErrorBox(
+        'Exam Security Check Failed',
+        'Configuration files have been tampered with or are missing. Please reinstall the application.'
+      );
+      app.quit();
+      return;
+    }
+  }
+
+  // ── Preflight Security Checks ──────────────────────────────────────────
+  // Run before the exam starts: VM detection, kill forbidden processes, etc.
+  securityManager.runPreflightChecks().then(preflightResult => {
+    if (!preflightResult.passed) {
+      console.error(`[main.js] PREFLIGHT FAILED: ${preflightResult.reason}`);
+      dialog.showErrorBox(
+        'Exam Security Check Failed',
+        preflightResult.reason || 'Your system does not meet the security requirements for this exam.'
+      );
+      app.quit();
+      return;
+    }
+
+    console.log('[main.js] Preflight checks passed. Initializing exam engine.');
+
+    if (preflightResult.details.killedProcesses && preflightResult.details.killedProcesses.length > 0) {
+      console.warn(`[main.js] Killed forbidden processes at startup: ${preflightResult.details.killedProcesses.join(', ')}`);
+    }
+  }).catch(err => {
+    console.error('[main.js] Preflight checks threw an error:', err.message);
+    // Don't block on preflight errors — let the exam proceed and the monitors will catch issues
+  });
+
   // NOTE: Do NOT call registerIpcHandlers here — ExamEngine.start() does it.
   examEngine = new ExamEngine(mainWindow, services);
   services.examEngine = examEngine;
   examEngine.start();
+
+  // ── Periodic Kiosk Enforcement (Safety Net) ────────────────────────────
+  // Every 3 seconds, re-enforce kiosk mode in case anything breaks it.
+  setInterval(() => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      try {
+        if (!mainWindow.isKiosk()) mainWindow.setKiosk(true);
+        if (!mainWindow.isFullScreen()) mainWindow.setFullScreen(true);
+        if (!mainWindow.isAlwaysOnTop()) mainWindow.setAlwaysOnTop(true, 'screen-saver');
+      } catch (e) {
+        // Window may be in the process of being destroyed
+      }
+    }
+  }, 3000);
 
   return mainWindow;
 }

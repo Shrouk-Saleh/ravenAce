@@ -1,8 +1,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// core/security/FocusMonitor.js — Window Focus Monitoring
+// core/security/FocusMonitor.js — Window Focus Monitoring & Kiosk Enforcement
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // Monitors if the user clicks away from the exam window (loses focus).
+// Enhanced with aggressive focus reclaim, kiosk mode re-enforcement, and
+// a periodic focus check interval that forcefully reclaims focus if lost.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const BaseMonitor = require('./BaseMonitor');
@@ -20,6 +22,8 @@ class FocusMonitor extends BaseMonitor {
     this._handleBlur = this._handleBlur.bind(this);
     this._handleFocus = this._handleFocus.bind(this);
     this._handleLeaveFullScreen = this._handleLeaveFullScreen.bind(this);
+    this._handleMinimize = this._handleMinimize.bind(this);
+    this._focusReclaimInterval = null;
   }
 
   start() {
@@ -32,8 +36,19 @@ class FocusMonitor extends BaseMonitor {
     
     this.mainWindow.on('focus', this._handleFocus);
     this.mainWindow.on('leave-full-screen', this._handleLeaveFullScreen);
+    this.mainWindow.on('minimize', this._handleMinimize);
+
+    // Start periodic focus reclaim check
+    const reclaimIntervalMs = (this.config.reclaimIntervalSeconds || 2) * 1000;
+    this._focusReclaimInterval = setInterval(() => {
+      this._enforceFocusAndKiosk();
+    }, reclaimIntervalMs);
+
+    // Enforce initial kiosk state
+    this._enforceFocusAndKiosk();
+
     this.isRunning = true;
-    console.log('[FocusMonitor] Started.');
+    console.log(`[FocusMonitor] Started. Focus reclaim every ${reclaimIntervalMs / 1000}s.`);
   }
 
   stop() {
@@ -42,37 +57,127 @@ class FocusMonitor extends BaseMonitor {
     this.mainWindow.removeListener('blur', this._handleBlur);
     this.mainWindow.removeListener('focus', this._handleFocus);
     this.mainWindow.removeListener('leave-full-screen', this._handleLeaveFullScreen);
+    this.mainWindow.removeListener('minimize', this._handleMinimize);
+
+    if (this._focusReclaimInterval) {
+      clearInterval(this._focusReclaimInterval);
+      this._focusReclaimInterval = null;
+    }
+
     this.isRunning = false;
     console.log('[FocusMonitor] Stopped.');
   }
 
   _handleBlur() {
-    this.reportViolation({
-      eventType: 'focus_lost',
+    this.reportEvidence({
+      type: 'focus_lost',
       severity: this.config.violations?.focusLost?.severity || 'medium',
-      metadata: { description: 'Exam window lost focus. Auto-submitting.' }
+      metadata: { description: 'Exam window lost focus.' }
     });
 
-    // Attempt to restore focus (may be ignored by OS depending on what stole focus)
-    if (this.mainWindow && !this.mainWindow.isDestroyed() && !this.mainWindow.isFocused()) {
-      this.mainWindow.focus();
-    }
+    // Aggressively attempt to restore focus
+    this._reclaimFocus();
   }
 
   _handleFocus() {
-    // We could log when focus returns if needed, but usually we just care about loss.
+    // Ensure kiosk mode is still active when we regain focus
+    this._enforceKiosk();
   }
 
   _handleLeaveFullScreen() {
-    this.reportViolation({
-      eventType: 'fullscreen_exited',
+    this.reportEvidence({
+      type: 'fullscreen_exited',
       severity: this.config.violations?.fullscreenExited?.severity || 'high',
-      metadata: { description: 'Exam window exited full-screen mode. Auto-submitting.' }
+      metadata: { description: 'Exam window exited full-screen mode.' }
     });
 
-    // Attempt to force it back to full-screen
-    if (this.mainWindow && !this.mainWindow.isDestroyed() && !this.mainWindow.isFullScreen()) {
-      this.mainWindow.setFullScreen(true);
+    // Immediately re-enter fullscreen and kiosk
+    this._enforceKiosk();
+  }
+
+  _handleMinimize() {
+    this.reportEvidence({
+      type: 'window_minimized',
+      severity: this.config.violations?.windowMinimized?.severity || 'low',
+      metadata: { description: 'Exam window was minimized.' }
+    });
+
+    // Restore from minimize immediately
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.restore();
+      this._reclaimFocus();
+    }
+  }
+
+  /**
+   * Aggressively reclaim focus for the exam window.
+   */
+  _reclaimFocus() {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+
+    try {
+      // Restore if minimized
+      if (this.mainWindow.isMinimized()) {
+        this.mainWindow.restore();
+      }
+
+      // Set always on top with the highest level
+      this.mainWindow.setAlwaysOnTop(true, 'screen-saver');
+
+      // Focus the window
+      this.mainWindow.focus();
+
+      // On Windows, also try to bring to front more aggressively
+      this.mainWindow.moveTop();
+
+      // Show the window if it's somehow hidden
+      if (!this.mainWindow.isVisible()) {
+        this.mainWindow.show();
+      }
+    } catch (err) {
+      console.error(`[FocusMonitor] Error reclaiming focus: ${err.message}`);
+    }
+  }
+
+  /**
+   * Ensure the window is in kiosk mode and fullscreen.
+   */
+  _enforceKiosk() {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+
+    try {
+      if (!this.mainWindow.isKiosk()) {
+        this.mainWindow.setKiosk(true);
+      }
+      if (!this.mainWindow.isFullScreen()) {
+        this.mainWindow.setFullScreen(true);
+      }
+      if (!this.mainWindow.isAlwaysOnTop()) {
+        this.mainWindow.setAlwaysOnTop(true, 'screen-saver');
+      }
+    } catch (err) {
+      console.error(`[FocusMonitor] Error enforcing kiosk: ${err.message}`);
+    }
+  }
+
+  /**
+   * Periodic check that combines focus reclaim and kiosk enforcement.
+   * This is the safety net — if anything somehow breaks focus or kiosk,
+   * this will catch it within a few seconds.
+   */
+  _enforceFocusAndKiosk() {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+
+    try {
+      // Enforce kiosk mode
+      this._enforceKiosk();
+
+      // If the window doesn't have focus, reclaim it
+      if (!this.mainWindow.isFocused()) {
+        this._reclaimFocus();
+      }
+    } catch (err) {
+      console.error(`[FocusMonitor] Error in periodic enforcement: ${err.message}`);
     }
   }
 }

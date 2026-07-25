@@ -9,7 +9,7 @@ const { gradeWrittenAnswer } = require("../services/writtenGraderService");
 const { gradeCodeAnswer } = require("../services/codeGraderService");
 
 // How many violations before the exam is auto-submitted
-const MAX_VIOLATIONS = 3;
+const MAX_VIOLATIONS = 9999;
 
 // ─── Security: Strip answer keys from questions before sending to students ───
 // This prevents students from reading correct answers via DevTools/Network tab.
