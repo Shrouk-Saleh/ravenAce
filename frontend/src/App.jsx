@@ -1,3 +1,4 @@
+import React, { Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
@@ -16,56 +17,54 @@ import ExamInterface    from './pages/ExamInterface'
 import AttemptHistory   from './pages/AttemptHistory'
 
 // Student — Phases 5-8
-import ResultDetail   from './pages/ResultDetail'
-import Leaderboard    from './pages/Leaderboard'
-import Certificates   from './pages/Certificates'
-import Notifications  from './pages/Notifications'
-
-// Instructor — Phases 1-4
-import InstructorDashboard from './pages/InstructorDashboard'
-import MyExams             from './pages/MyExams'
-import CreateExam          from './pages/CreateExam'
-import EditExam            from './pages/EditExam'
-import QuestionManager     from './pages/QuestionManager'
-import QuestionBank        from './pages/QuestionBank'
-
-// Instructor — Phases 5-8
-import InstructorResults from './pages/InstructorResults'
-import AttemptDetail     from './pages/AttemptDetail'
-import ExamStats         from './pages/ExamStats'
-
-// Admin — Phase 8
-import AdminDashboard from './pages/AdminDashboard'
-import AdminUsers     from './pages/AdminUsers'
-import AdminExams     from './pages/AdminExams'
-
-// Organization — Phases 1-8
-import OrgDashboard     from './pages/OrgDashboard'
-import OrgProfile       from './pages/OrgProfile'
-import OrgInstructors   from './pages/OrgInstructors'
-import OrgStudents      from './pages/OrgStudents'
-import OrgSubscription  from './pages/OrgSubscription'
-
 // Shared & Public
 import Profile           from './pages/Profile'
-import VerifyCertificate from './pages/VerifyCertificate'
-import Showcase          from './pages/Showcase'
 import ActivateAccount   from './pages/ActivateAccount'
-import Pricing           from './pages/Pricing'
 import { Unauthorized, NotFound } from './pages/ErrorPages'
 
-// AI Features
-import AiTutor             from './pages/AiTutor'
-import QuestionGenerator   from './pages/QuestionGenerator'
-import AiPerformanceReport from './pages/AiPerformanceReport'
-import CheatAnalysis       from './pages/CheatAnalysis'
-import PlagiarismReportPage from './pages/PlagiarismReportPage'
+// ── Lazy Loaded Routes (to reduce initial bundle size) ──
+const ResultDetail   = React.lazy(() => import('./pages/ResultDetail'))
+const Leaderboard    = React.lazy(() => import('./pages/Leaderboard'))
+const Certificates   = React.lazy(() => import('./pages/Certificates'))
+const Notifications  = React.lazy(() => import('./pages/Notifications'))
+
+const InstructorResults = React.lazy(() => import('./pages/InstructorResults'))
+const AttemptDetail     = React.lazy(() => import('./pages/AttemptDetail'))
+const ExamStats         = React.lazy(() => import('./pages/ExamStats'))
+
+const InstructorDashboard = React.lazy(() => import('./pages/InstructorDashboard'))
+const MyExams             = React.lazy(() => import('./pages/MyExams'))
+const CreateExam          = React.lazy(() => import('./pages/CreateExam'))
+const EditExam            = React.lazy(() => import('./pages/EditExam'))
+const QuestionManager     = React.lazy(() => import('./pages/QuestionManager'))
+const QuestionBank        = React.lazy(() => import('./pages/QuestionBank'))
+
+const AdminDashboard = React.lazy(() => import('./pages/AdminDashboard'))
+const AdminUsers     = React.lazy(() => import('./pages/AdminUsers'))
+const AdminExams     = React.lazy(() => import('./pages/AdminExams'))
+
+const OrgDashboard     = React.lazy(() => import('./pages/OrgDashboard'))
+const OrgProfile       = React.lazy(() => import('./pages/OrgProfile'))
+const OrgInstructors   = React.lazy(() => import('./pages/OrgInstructors'))
+const OrgStudents      = React.lazy(() => import('./pages/OrgStudents'))
+const OrgSubscription  = React.lazy(() => import('./pages/OrgSubscription'))
+
+const VerifyCertificate = React.lazy(() => import('./pages/VerifyCertificate'))
+const Showcase          = React.lazy(() => import('./pages/Showcase'))
+const Pricing           = React.lazy(() => import('./pages/Pricing'))
+
+const AiTutor             = React.lazy(() => import('./pages/AiTutor'))
+const QuestionGenerator   = React.lazy(() => import('./pages/QuestionGenerator'))
+const AiPerformanceReport = React.lazy(() => import('./pages/AiPerformanceReport'))
+const CheatAnalysis       = React.lazy(() => import('./pages/CheatAnalysis'))
+const PlagiarismReportPage = React.lazy(() => import('./pages/PlagiarismReportPage'))
 
 function App() {
   return (
     <ThemeProvider>
     <AuthProvider>
       <BrowserRouter>
+        <Suspense fallback={<div className="flex h-screen items-center justify-center"><div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div></div>}>
         <Routes>
 
           {/* ── Public ─────────────────────────────────────── */}
@@ -189,6 +188,7 @@ function App() {
           <Route path="*"             element={<NotFound />} />
 
         </Routes>
+        </Suspense>
       </BrowserRouter>
     </AuthProvider>
     </ThemeProvider>
