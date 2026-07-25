@@ -18,7 +18,7 @@ RUN cd backend && npm ci --omit=dev
 
 # ── Install frontend dependencies ─────────────────────────────────
 COPY frontend/package*.json ./frontend/
-RUN cd frontend && npm ci
+RUN cd frontend && npm ci --legacy-peer-deps
 
 # ── Copy full source ──────────────────────────────────────────────
 COPY backend/ ./backend/
