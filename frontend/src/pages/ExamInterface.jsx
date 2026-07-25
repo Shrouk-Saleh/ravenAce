@@ -340,7 +340,7 @@ function ExamInterface() {
   // ── Loading / error / empty states ─────────────────────────────────
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen w-full bg-background flex items-center justify-center">
         <div className="text-center">
           <FaSpinner className="text-primary animate-spin text-[48px] block mx-auto mb-4" />
           <p className="text-body-lg text-on-surface-variant">Loading exam...</p>
@@ -351,7 +351,7 @@ function ExamInterface() {
 
   if (attempt?.status === 'grading') {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen w-full bg-background flex items-center justify-center">
         <div className="text-center max-w-sm px-4">
           <FaSpinner className="text-primary animate-spin text-[64px] block mx-auto mb-6" />
           <h2 className="text-h2 text-on-surface mb-2">Grading in Progress</h2>
@@ -365,7 +365,7 @@ function ExamInterface() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+      <div className="min-h-screen w-full bg-background flex items-center justify-center px-4">
         <div className="text-center max-w-sm">
           <FaExclamationTriangle className="text-error text-[48px] block mx-auto mb-4" />
           <p className="text-body-lg text-on-surface mb-2">Something went wrong</p>
