@@ -4,7 +4,7 @@
     "version": "1.0.0"
   },
   "backend": {
-    "baseUrl": "http://localhost:5000",
+    "baseUrl": "https://ravenace.onrender.com",
     "apiPrefix": "",
     "timeout": 15000
   },

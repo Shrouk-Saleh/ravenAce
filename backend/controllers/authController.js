@@ -23,8 +23,8 @@ const register = async (req, res, next) => {
     if (!emailRegex.test(email)) {
       return next(new AppError("Please provide a valid email.", 400));
     }
-    if (password.length < 6) {
-      return next(new AppError("Password must be at least 6 characters.", 400));
+    if (password.length < 8) {
+      return next(new AppError("Password must be at least 8 characters.", 400));
     }
 
     // Prevent self-assigning admin — only student, instructor, and organization are allowed.
@@ -183,9 +183,9 @@ const activateAccount = async (req, res, next) => {
     if (password !== confirmPassword) {
       return next(new AppError("Passwords do not match.", 400));
     }
-    if (password.length < 6) {
+    if (password.length < 8) {
       return next(
-        new AppError("Password must be at least 6 characters.", 400)
+        new AppError("Password must be at least 8 characters.", 400)
       );
     }
 
@@ -372,9 +372,9 @@ const resetPassword = async (req, res, next) => {
     if (newPassword !== confirmPassword) {
       return next(new AppError("Passwords do not match.", 400));
     }
-    if (newPassword.length < 6) {
+    if (newPassword.length < 8) {
       return next(
-        new AppError("Password must be at least 6 characters.", 400)
+        new AppError("Password must be at least 8 characters.", 400)
       );
     }
 

@@ -123,7 +123,7 @@ class ExamEngine {
       const state = this.services.sessionService.getState();
       if (state && state.attemptId && state.state === 'SUBMITTED') {
         const { shell } = require('electron');
-        const frontendUrl = process.env.RAVENACE_FRONTEND_URL || 'http://localhost:5173';
+        const frontendUrl = process.env.RAVENACE_FRONTEND_URL || 'https://ravenace.onrender.com';
         shell.openExternal(`${frontendUrl}/results/${state.attemptId}`);
       }
     } catch(e) {
