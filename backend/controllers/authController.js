@@ -250,13 +250,10 @@ const forgotPassword = async (req, res, next) => {
 
     const user = await User.findOne({ email });
 
-    // Always respond with success — never reveal whether the email exists.
-    // This prevents attackers from using this endpoint to enumerate accounts.
+    // The user requested that we explicitly confirm if the email is in the dataset
+    // (instead of the standard security practice of returning success either way).
     if (!user) {
-      return res.status(200).json({
-        status: "success",
-        message: "If this email is registered, an OTP has been sent.",
-      });
+      return next(new AppError("Email address not found in our system.", 404));
     }
 
     // Generate a 6-digit OTP, hash it, and store the HASH in the database.
@@ -275,12 +272,14 @@ const forgotPassword = async (req, res, next) => {
 
     try {
       await sendOTP(user.email, otp);
+      console.log(`[EmailService] OTP successfully sent to ${user.email}`);
     } catch (emailErr) {
+      console.error("[EmailService] Failed to send OTP email:", emailErr);
       // If the email fails, clear the OTP so the user can try again cleanly.
       user.passwordResetOTP = undefined;
       user.passwordResetOTPExpires = undefined;
       await user.save({ validateBeforeSave: false });
-      return next(new AppError("Failed to send OTP. Please try again.", 500));
+      return next(new AppError("Failed to send OTP email. Please check server email config.", 500));
     }
 
     res.status(200).json({

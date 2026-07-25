@@ -2,6 +2,9 @@ import { useState, useRef, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import api from '../api/axios'
 import AppLayout from '../components/AppLayout'
+import ReactMarkdown from 'react-markdown'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
 
 function AiTutor() {
   const { examId } = useParams()
@@ -74,15 +77,7 @@ function AiTutor() {
     setMessages([{ role: 'assistant', content: `Chat cleared! Ask me anything about **${exam?.title}**.` }])
   }
 
-  // Simple markdown-style bold
-  const renderContent = (text) => {
-    const parts = text.split(/(\*\*[^*]+\*\*)/g)
-    return parts.map((part, i) =>
-      part.startsWith('**') && part.endsWith('**')
-        ? <strong key={i}>{part.slice(2, -2)}</strong>
-        : part
-    )
-  }
+
 
   if (fetching) return (
     <AppLayout>
@@ -143,7 +138,13 @@ function AiTutor() {
                   ? 'bg-primary text-on-primary rounded-br-sm'
                   : 'bg-surface-container-lowest border border-outline-variant text-on-surface rounded-bl-sm'
               }`}>
-                {renderContent(msg.content)}
+                <ReactMarkdown 
+                  remarkPlugins={[remarkMath]} 
+                  rehypePlugins={[rehypeKatex]}
+                  className="prose prose-sm max-w-none prose-p:text-current prose-headings:text-current prose-strong:text-current prose-em:text-current prose-code:text-current prose-a:text-current prose-li:text-current"
+                >
+                  {msg.content}
+                </ReactMarkdown>
               </div>
             </div>
           ))}
