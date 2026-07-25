@@ -180,13 +180,15 @@ function ExamDetail() {
                 </p>
                 
                 <div className="pt-4 border-t border-outline-variant mt-4">
-                  <p className="text-label-sm text-on-surface-variant mb-3">App didn't open automatically? Copy and run this command in the <b>electron-engine</b> terminal:</p>
+                  <p className="text-label-sm text-on-surface-variant mb-3">Don't have the secure engine installed?</p>
                   
-                  <div className="bg-surface-container-highest p-3 rounded text-left mb-4 overflow-x-auto">
-                    <code className="text-accent text-sm break-all font-mono">
-                      npm start -- "ravenace://start?token={sessionToken}"
-                    </code>
-                  </div>
+                  <a 
+                    href="https://github.com/Shrouk-Saleh/ravenAce/releases/download/v1.0.0/RavenACE-Secure-Engine-Windows.zip"
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-surface-container-highest text-on-surface rounded hover:bg-surface-container-high transition-colors text-sm font-medium w-full"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">download</span>
+                    Download for Windows
+                  </a>
                 </div>
               </div>
             )}
