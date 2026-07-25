@@ -154,6 +154,8 @@ function createSecureWindow() {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+    mainWindow.setFullScreen(true);
+    mainWindow.setKiosk(true);
     mainWindow.focus();
   });
 
