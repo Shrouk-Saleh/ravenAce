@@ -408,8 +408,20 @@ const saveAiQuestions = async (req, res, next) => {
       return next(new AppError("An array of questions is required.", 400));
     }
 
-    // Ensure instructor is set on all questions
-    const toSave = questions.map(q => ({ ...q, instructor: req.user._id }));
+    const allowedFields = [
+      "text", "type", "options", "correctAnswer", "explanation",
+      "modelAnswer", "gradingCriteria", "codeTemplate", "allowedLanguages",
+      "timeLimit", "memoryLimit", "testCases", "maxScore",
+      "category", "tags", "difficulty",
+    ];
+    const toSave = questions.map(q => {
+      const clean = {};
+      allowedFields.forEach(field => {
+        if (q[field] !== undefined) clean[field] = q[field];
+      });
+      clean.instructor = req.user._id;
+      return clean;
+    });
     const saved = await Question.insertMany(toSave);
 
     res.status(201).json({
