@@ -72,16 +72,31 @@ const getMyResult = async (req, res, next) => {
 // ────────────────────────────────────────────────────────────────
 const getMyHistory = async (req, res, next) => {
   try {
-    const attempts = await Attempt.find({
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 20;
+    const skip = (page - 1) * limit;
+
+    const filter = {
       student: req.user._id,
       status: { $ne: "in-progress" },
-    })
+    };
+
+    const total = await Attempt.countDocuments(filter);
+    const attempts = await Attempt.find(filter)
       .populate("exam", "title totalScore passingScore category")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
 
     res.status(200).json({
       status: "success",
       results: attempts.length,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit)
+      },
       data: { attempts },
     });
   } catch (err) {
