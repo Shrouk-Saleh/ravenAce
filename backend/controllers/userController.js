@@ -29,7 +29,13 @@ const updateProfile = async (req, res, next) => {
 
     const updates = {};
     if (name) updates.name = name;
-    if (email) updates.email = email.trim().toLowerCase();
+    if (email) {
+      updates.email = email.trim().toLowerCase();
+      const emailRegex = /^\S+@\S+\.\S+$/;
+      if (!emailRegex.test(updates.email)) {
+        return next(new AppError("Please provide a valid email address.", 400));
+      }
+    }
 
     // Only allow safe fields here — password changes go through the auth flow.
     // runValidators: true re-runs schema validators (e.g. email format, minlength).

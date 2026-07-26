@@ -31,6 +31,10 @@ const updateProfile = async (req, res, next) => {
   try {
     if (req.body.email) {
       req.body.email = req.body.email.trim().toLowerCase();
+      const emailRegex = /^\S+@\S+\.\S+$/;
+      if (!emailRegex.test(req.body.email)) {
+        return next(new AppError("Please provide a valid email address.", 400));
+      }
     }
     const allowedFields = [
       "name", "email", "phone", "address",
@@ -173,7 +177,13 @@ const createInstructor = async (req, res, next) => {
   try {
     const { name } = req.body;
     let { email } = req.body;
-    if (email) email = email.trim().toLowerCase();
+    if (email) {
+      email = email.trim().toLowerCase();
+      const emailRegex = /^\S+@\S+\.\S+$/;
+      if (!emailRegex.test(email)) {
+        return next(new AppError("Please provide a valid email address.", 400));
+      }
+    }
     if (!name || !email) {
       return next(new AppError("Please provide name and email.", 400));
     }
@@ -250,7 +260,13 @@ const updateInstructor = async (req, res, next) => {
     const { name, email } = req.body;
     const updates = {};
     if (name) updates.name = name;
-    if (email) updates.email = email.trim().toLowerCase();
+    if (email) {
+      updates.email = email.trim().toLowerCase();
+      const emailRegex = /^\S+@\S+\.\S+$/;
+      if (!emailRegex.test(updates.email)) {
+        return next(new AppError("Please provide a valid email address.", 400));
+      }
+    }
 
     const updatedUser = await User.findByIdAndUpdate(user._id, updates, { new: true, runValidators: true });
 
@@ -405,7 +421,13 @@ const createStudent = async (req, res, next) => {
   try {
     const { name } = req.body;
     let { email } = req.body;
-    if (email) email = email.trim().toLowerCase();
+    if (email) {
+      email = email.trim().toLowerCase();
+      const emailRegex = /^\S+@\S+\.\S+$/;
+      if (!emailRegex.test(email)) {
+        return next(new AppError("Please provide a valid email address.", 400));
+      }
+    }
     if (!name || !email) {
       return next(new AppError("Please provide name and email.", 400));
     }
@@ -481,7 +503,13 @@ const updateStudent = async (req, res, next) => {
     const { name, email } = req.body;
     const updates = {};
     if (name) updates.name = name;
-    if (email) updates.email = email.trim().toLowerCase();
+    if (email) {
+      updates.email = email.trim().toLowerCase();
+      const emailRegex = /^\S+@\S+\.\S+$/;
+      if (!emailRegex.test(updates.email)) {
+        return next(new AppError("Please provide a valid email address.", 400));
+      }
+    }
 
     const updatedUser = await User.findByIdAndUpdate(user._id, updates, { new: true, runValidators: true });
 
