@@ -34,8 +34,7 @@ jobs:
         cd frontend
         npm run build
 
-    - name: Basic Backend Lint/Test Check
+    - name: Run Backend Tests
       run: |
         cd backend
-        # Add actual tests here when you have them written!
-        echo "Tests passed!"
+        npm run test
