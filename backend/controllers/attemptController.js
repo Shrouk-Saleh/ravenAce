@@ -410,10 +410,12 @@ const saveAnswer = async (req, res, next) => {
       return next(new AppError("Active attempt not found.", 404));
     }
 
-    const elapsedMs = Date.now() - new Date(attempt.startedAt).getTime();
-    const allowedMs = attempt.exam.duration * 60 * 1000 + 60 * 1000; // duration (minutes) + 60s grace period
-    if (elapsedMs > allowedMs) {
-      return next(new AppError("Time limit exceeded for this attempt.", 400));
+    if (attempt.exam.duration) {
+      const elapsedMs = Date.now() - new Date(attempt.startedAt).getTime();
+      const allowedMs = attempt.exam.duration * 60 * 1000 + 60 * 1000; // duration (minutes) + 60s grace period
+      if (elapsedMs > allowedMs) {
+        return next(new AppError("Time limit exceeded for this attempt.", 400));
+      }
     }
 
     if (attempt.exam.securityMode === "lockdown" && req.user.sessionType !== "electron-locked") {
