@@ -18,8 +18,9 @@ const getAllQuestions = async (req, res, next) => {
       filter.category = req.query.category;
     }
     if (req.query.search) {
+      const escapedSearch = req.query.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       // $regex with 'i' flag = case-insensitive partial match
-      filter.text = { $regex: req.query.search, $options: "i" };
+      filter.text = { $regex: escapedSearch, $options: "i" };
     }
 
     const page = parseInt(req.query.page, 10) || 1;
