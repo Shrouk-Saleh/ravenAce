@@ -2,6 +2,7 @@
 const User = require("../models/User");
 const Exam = require("../models/Exam");
 const Attempt = require("../models/Attempt");
+const Organization = require("../models/Organization");
 const { AppError } = require("../utils/errorUtils");
 
 // ────────────────────────────────────────────────────────────────
@@ -59,6 +60,18 @@ const updateUserRole = async (req, res, next) => {
       { new: true }
     );
     if (!user) return next(new AppError("User not found.", 404));
+
+    if (role === "organization") {
+      const existingOrg = await Organization.findOne({ owner: user._id });
+      if (!existingOrg) {
+        await Organization.create({
+          owner: user._id,
+          name: user.name,
+          email: user.email,
+        });
+      }
+    }
+
     res.status(200).json({ status: "success", data: { user } });
   } catch (err) {
     next(err);
