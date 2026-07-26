@@ -9,7 +9,7 @@ const { gradeWrittenAnswer } = require("../services/writtenGraderService");
 const { gradeCodeAnswer } = require("../services/codeGraderService");
 
 // How many violations before the exam is auto-submitted
-const MAX_VIOLATIONS = 9999;
+const { MAX_VIOLATIONS } = require("../utils/constants");
 
 // ─── Security: Strip answer keys from questions before sending to students ───
 // This prevents students from reading correct answers via DevTools/Network tab.
@@ -329,12 +329,12 @@ const startExam = async (req, res, next) => {
     }
 
     // ── Max attempts check ─────────────────────────────────────────────────
-    // Count only completed, gradeable attempts — abandoned attempts don't
-    // count since the student never received a score for them.
+    // Count all terminal attempt states (including "abandoned") toward the
+    // limit — abandoning no longer grants an extra attempt (fix for B2).
     const completedCount = await Attempt.countDocuments({
       student: req.user._id,
       exam: examId,
-      status: { $in: ["submitted", "timed-out", "auto-submitted"] },
+      status: { $in: ["submitted", "timed-out", "auto-submitted", "abandoned"] },
     });
 
     if (completedCount >= exam.maxAttempts) {
@@ -408,6 +408,12 @@ const saveAnswer = async (req, res, next) => {
 
     if (!attempt) {
       return next(new AppError("Active attempt not found.", 404));
+    }
+
+    const elapsedMs = Date.now() - new Date(attempt.startedAt).getTime();
+    const allowedMs = attempt.exam.duration * 60 * 1000 + 60 * 1000; // duration (minutes) + 60s grace period
+    if (elapsedMs > allowedMs) {
+      return next(new AppError("Time limit exceeded for this attempt.", 400));
     }
 
     if (attempt.exam.securityMode === "lockdown" && req.user.sessionType !== "electron-locked") {

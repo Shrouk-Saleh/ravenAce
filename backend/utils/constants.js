@@ -16,6 +16,9 @@ const VIOLATION_TYPES = [
   "screen_capture_attempt",
 ];
 
+const MAX_VIOLATIONS = 5; // exam auto-submits after this many logged violations
+
 module.exports = {
   VIOLATION_TYPES,
+  MAX_VIOLATIONS,
 };
