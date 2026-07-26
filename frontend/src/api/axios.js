@@ -22,9 +22,19 @@ api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      window.location.href = '/login'
+      const url = err.config?.url || "";
+      const isAuthEndpoint =
+        url.includes("/auth/login") ||
+        url.includes("/auth/register") ||
+        url.includes("/auth/forgot-password") ||
+        url.includes("/auth/verify-reset-otp") ||
+        url.includes("/auth/reset-password");
+      
+      if (!isAuthEndpoint) {
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        window.location.href = '/login'
+      }
     }
     return Promise.reject(err)
   }
