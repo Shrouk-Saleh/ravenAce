@@ -1,22 +1,44 @@
-const nodemailer = require("nodemailer");
+const BREVO_API_KEY = process.env.EMAIL_PASS; // We will use EMAIL_PASS to store the Brevo API Key
+const FROM_EMAIL = process.env.EMAIL_FROM || process.env.EMAIL_USER; 
 
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-  // Add aggressive timeouts so if Gmail drops the connection from Render,
-  // the app fails fast instead of hanging indefinitely.
-  connectionTimeout: 5000,
-  greetingTimeout: 5000,
-  socketTimeout: 5000,
-});
+async function sendEmail({ to, subject, html }, timeoutMs = 8000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        "accept": "application/json",
+        "api-key": BREVO_API_KEY,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        sender: {
+          name: "Raven ACE",
+          email: FROM_EMAIL
+        },
+        to: [{ email: to }],
+        subject: subject,
+        htmlContent: html,
+      }),
+      signal: controller.signal,
+    });
+    
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => "");
+      throw new Error(`Brevo ${res.status}: ${errorText}`);
+    }
+    
+    return res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 // Sends a 6-digit OTP to the user's email address.
-const sendOTP = async (toEmail, otp) => {
-  await transporter.sendMail({
-    from: `"Exam System" <${process.env.EMAIL_USER}>`,
+const sendOTP = (toEmail, otp) =>
+  sendEmail({
     to: toEmail,
     subject: "Your Password Reset OTP",
     html: `
@@ -29,13 +51,11 @@ const sendOTP = async (toEmail, otp) => {
       </div>
     `,
   });
-};
 
 // Sends an invitation email to a new user created by an organization.
 // The activationUrl contains a token that the user must use to set their password.
-const sendInvitation = async (toEmail, userName, orgName, activationUrl) => {
-  await transporter.sendMail({
-    from: `"Raven ACE" <${process.env.EMAIL_USER}>`,
+const sendInvitation = (toEmail, userName, orgName, activationUrl) =>
+  sendEmail({
     to: toEmail,
     subject: `You've been invited to join ${orgName} on Raven ACE`,
     html: `
@@ -67,6 +87,5 @@ const sendInvitation = async (toEmail, userName, orgName, activationUrl) => {
       </div>
     `,
   });
-};
 
 module.exports = { sendOTP, sendInvitation };
