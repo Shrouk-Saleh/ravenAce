@@ -57,7 +57,6 @@ const getLeaderboard = async (req, res, next) => {
         },
       },
       { $sort: { bestScore: -1, bestTimeTaken: 1 } },
-      { $limit: 50 },
       {
         $lookup: {
           from: "users",
@@ -82,21 +81,26 @@ const getLeaderboard = async (req, res, next) => {
     ]);
 
     // Add rank number and flag current user
-    const ranked = leaderboard.map((entry, i) => ({
+    const fullRanked = leaderboard.map((entry, i) => ({
       rank: i + 1,
       ...entry,
       isCurrentUser: entry.studentId.toString() === req.user._id.toString(),
     }));
 
     // Find current user's position even if they're outside top 50
-    const currentUserEntry = ranked.find(e => e.isCurrentUser) || null;
+    const currentUserEntry = fullRanked.find(e => e.isCurrentUser) || null;
+    const currentUserRank = currentUserEntry ? currentUserEntry.rank : null;
+
+    // Slice to top 50 for the leaderboard display
+    const top50 = fullRanked.slice(0, 50);
 
     res.status(200).json({
       status: "success",
       data: {
         exam: { _id: exam._id, title: exam.title, totalScore: exam.totalScore },
-        leaderboard: ranked,
+        leaderboard: top50,
         currentUser: currentUserEntry,
+        currentUserRank,
       },
     });
   } catch (err) {
