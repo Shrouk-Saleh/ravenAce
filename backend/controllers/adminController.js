@@ -124,6 +124,13 @@ const deleteUser = async (req, res, next) => {
       ]);
       const org = await Organization.findOne({ owner: user._id });
       if (org) {
+        // Unpublish exams owned by the org's instructors before they become "public"
+        const orgInstructorIds = await User.find({ organization: org._id }).distinct("_id");
+        await Exam.updateMany(
+          { instructor: { $in: orgInstructorIds } },
+          { $set: { isPublished: false } }
+        );
+
         // Remove org link from all member accounts
         await User.updateMany({ organization: org._id }, { $set: { organization: null } });
         await org.deleteOne();
