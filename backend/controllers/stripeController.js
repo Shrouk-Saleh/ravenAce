@@ -207,6 +207,19 @@ const handleWebhook = async (req, res) => {
         if (subscription.status === "active") {
           org.maxStudents = maxStudents;
           org.maxInstructors = maxInstructors;
+
+          // Note: Current count is calculated at webhook time only.
+          // This serves as a best-effort visibility flag, not strict real-time enforcement.
+          const User = require("../models/User");
+          const currentStudents = await User.countDocuments({ organization: org._id, role: "student" });
+          const currentInstructors = await User.countDocuments({ organization: org._id, role: "instructor" });
+          
+          if (currentStudents > maxStudents || currentInstructors > maxInstructors) {
+            org.overLimitSinceDowngrade = true;
+            console.warn(`[Downgrade Alert] Org ${org.name} (${org._id}) has downgraded to ${plan} but is over the new limits. (Students: ${currentStudents}/${maxStudents}, Instructors: ${currentInstructors}/${maxInstructors})`);
+          } else {
+            org.overLimitSinceDowngrade = false;
+          }
         }
 
         await org.save();

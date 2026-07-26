@@ -45,6 +45,7 @@ const organizationSchema = new mongoose.Schema(
     // 0 = no subscription, 100 = standard, 999999 = premium (unlimited)
     maxStudents: { type: Number, default: 0 },
     maxInstructors: { type: Number, default: 0 },
+    overLimitSinceDowngrade: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
