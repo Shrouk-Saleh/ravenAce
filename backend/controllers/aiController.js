@@ -546,6 +546,18 @@ const runPerformanceAnalysis = async (req, res, next) => {
 
 const getPerformanceAnalysis = async (req, res, next) => {
   try {
+    const attempt = await Attempt.findById(req.params.attemptId);
+    if (!attempt) return next(new AppError("Attempt not found.", 404));
+
+    if (req.user.role === "student") {
+      if (attempt.student.toString() !== req.user._id.toString()) {
+        return next(new AppError("Not authorized to access this exam's data.", 403));
+      }
+    } else {
+      const ownerErr = await checkInstructorOwnership(req, attempt.exam._id || attempt.exam);
+      if (ownerErr) return next(ownerErr);
+    }
+
     const analysis = await AiAnalysis.findOne({
       attempt: req.params.attemptId,
       type: "performance",
