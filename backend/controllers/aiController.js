@@ -13,6 +13,7 @@ const ChatMessage = require("../models/ChatMessage");
 const AiAnalysis = require("../models/AiAnalysis");
 const PlagiarismReport = require("../models/PlagiarismReport");
 const CheatLog = require("../models/CheatLog");
+const { COMPLETED_ATTEMPT_STATUSES } = require("../utils/constants");
 const { AppError } = require("../utils/errorUtils");
 
 const { gradeWrittenAnswer } = require("../services/writtenGraderService");
@@ -64,7 +65,7 @@ const gradeWritten = async (req, res, next) => {
   try {
     const attempt = await Attempt.findOne({
       _id: req.params.attemptId,
-      status: { $in: ["submitted", "timed-out", "auto-submitted"] },
+      status: { $in: COMPLETED_ATTEMPT_STATUSES },
     });
     if (!attempt) return next(new AppError("Submitted attempt not found.", 404));
 
@@ -130,7 +131,7 @@ const gradeAllWritten = async (req, res, next) => {
   try {
     const attempt = await Attempt.findOne({
       _id: req.params.attemptId,
-      status: { $in: ["submitted", "timed-out", "auto-submitted"] },
+      status: { $in: COMPLETED_ATTEMPT_STATUSES },
     });
     if (!attempt) return next(new AppError("Submitted attempt not found.", 404));
 
@@ -543,7 +544,7 @@ const runPerformanceAnalysis = async (req, res, next) => {
       if (ownerErr) return next(ownerErr);
     }
 
-    if (!["submitted", "timed-out", "auto-submitted"].includes(attempt.status)) {
+    if (!COMPLETED_ATTEMPT_STATUSES.includes(attempt.status)) {
       return next(new AppError("Attempt is not yet submitted.", 400));
     }
 

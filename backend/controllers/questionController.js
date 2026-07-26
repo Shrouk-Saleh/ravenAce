@@ -2,6 +2,7 @@ const Question = require("../models/Question");
 const Exam = require("../models/Exam");
 const Attempt = require("../models/Attempt");
 const { calculateScore } = require("./attemptController");
+const { COMPLETED_ATTEMPT_STATUSES } = require("../utils/constants");
 const { AppError } = require("../utils/errorUtils");
 
 // ────────────────────────────────────────────────────────────────
@@ -215,7 +216,7 @@ const removeFromExam = async (req, res, next) => {
     );
 
     // Now recalculate the grades for all submitted attempts for this exam
-    const attempts = await Attempt.find({ exam: examId, status: { $in: ["submitted", "auto-submitted"] } });
+    const attempts = await Attempt.find({ exam: examId, status: { $in: COMPLETED_ATTEMPT_STATUSES } });
     for (const attempt of attempts) {
       const newTotalScore = calculateScore(updatedExam.questions.filter(Boolean), attempt.perQuestionResult, updatedExam.totalScore);
       attempt.score = newTotalScore;
@@ -250,7 +251,7 @@ const getQuestionStats = async (req, res, next) => {
     // Find all submitted attempts that contain this question
     // We unwind the perQuestionResult array to easily match and project the stats
     const stats = await Attempt.aggregate([
-      { $match: { status: { $in: ["submitted", "auto-submitted"] } } },
+      { $match: { status: { $in: COMPLETED_ATTEMPT_STATUSES } } },
       { $unwind: "$perQuestionResult" },
       { $match: { "perQuestionResult.question": question._id } },
       {

@@ -5,6 +5,7 @@
 
 const Attempt = require("../models/Attempt");
 const Exam = require("../models/Exam");
+const { COMPLETED_ATTEMPT_STATUSES } = require("../utils/constants");
 const { AppError } = require("../utils/errorUtils");
 
 // ────────────────────────────────────────────────────────────────
@@ -39,7 +40,7 @@ const getLeaderboard = async (req, res, next) => {
         // Only finished attempts on this exam
         $match: {
           exam: exam._id,
-          status: { $in: ["submitted", "timed-out", "auto-submitted"] },
+          status: { $in: COMPLETED_ATTEMPT_STATUSES },
           passed: true, // leaderboard shows only passing scores
         },
       },
@@ -127,7 +128,7 @@ const getExamStats = async (req, res, next) => {
 
     const attempts = await Attempt.find({
       exam: exam._id,
-      status: { $in: ["submitted", "timed-out", "auto-submitted"] },
+      status: { $in: COMPLETED_ATTEMPT_STATUSES },
     });
 
     if (attempts.length === 0) {

@@ -18,7 +18,10 @@ const VIOLATION_TYPES = [
 
 const MAX_VIOLATIONS = 5; // exam auto-submits after this many logged violations
 
+const COMPLETED_ATTEMPT_STATUSES = ["submitted", "timed-out", "auto-submitted"];
+
 module.exports = {
   VIOLATION_TYPES,
   MAX_VIOLATIONS,
+  COMPLETED_ATTEMPT_STATUSES,
 };

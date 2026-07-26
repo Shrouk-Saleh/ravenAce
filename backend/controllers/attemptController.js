@@ -4,12 +4,12 @@ const CheatLog = require("../models/CheatLog");
 const { AppError } = require("../utils/errorUtils");
 const { createCertificateIfPassed } = require("./certificateController");
 const { createNotification } = require("./notificationController");
-const { VIOLATION_TYPES } = require("../utils/constants");
+const { VIOLATION_TYPES, MAX_VIOLATIONS, COMPLETED_ATTEMPT_STATUSES } = require("../utils/constants");
 const { gradeWrittenAnswer } = require("../services/writtenGraderService");
 const { gradeCodeAnswer } = require("../services/codeGraderService");
 
 // How many violations before the exam is auto-submitted
-const { MAX_VIOLATIONS } = require("../utils/constants");
+// (MAX_VIOLATIONS imported above)
 
 // ─── Security: Strip answer keys from questions before sending to students ───
 // This prevents students from reading correct answers via DevTools/Network tab.
@@ -545,7 +545,7 @@ const getAttemptHistory = async (req, res, next) => {
     // Only show completed, gradeable attempts — not in-progress or abandoned
     const query = {
       student: req.user._id,
-      status: { $in: ["submitted", "timed-out", "auto-submitted"] },
+      status: { $in: COMPLETED_ATTEMPT_STATUSES },
     };
     const total = await Attempt.countDocuments(query);
 
