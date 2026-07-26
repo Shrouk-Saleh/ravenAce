@@ -207,12 +207,9 @@ const createInstructor = async (req, res, next) => {
     // Send invitation email
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
     const activationUrl = `${frontendUrl}/activate?token=${rawToken}`;
-    try {
-      await sendInvitation(email, name, req.organization.name, activationUrl);
-    } catch (emailErr) {
-      console.error("Invitation email failed:", emailErr.message);
-      // Don't fail the request — user can be re-invited
-    }
+    sendInvitation(email, name, req.organization.name, activationUrl).catch((err) =>
+      console.error("Invitation email failed:", err.message)
+    );
 
     res.status(201).json({
       status: "success",
@@ -346,7 +343,9 @@ const resendInstructorInvite = async (req, res, next) => {
 
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
     const activationUrl = `${frontendUrl}/activate?token=${rawToken}`;
-    await sendInvitation(user.email, user.name, req.organization.name, activationUrl);
+    sendInvitation(user.email, user.name, req.organization.name, activationUrl).catch((err) =>
+      console.error("Invitation email failed:", err.message)
+    );
 
     res.status(200).json({
       status: "success",
@@ -437,11 +436,9 @@ const createStudent = async (req, res, next) => {
     // Send invitation email
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
     const activationUrl = `${frontendUrl}/activate?token=${rawToken}`;
-    try {
-      await sendInvitation(email, name, req.organization.name, activationUrl);
-    } catch (emailErr) {
-      console.error("Invitation email failed:", emailErr.message);
-    }
+    sendInvitation(email, name, req.organization.name, activationUrl).catch((err) =>
+      console.error("Invitation email failed:", err.message)
+    );
 
     res.status(201).json({
       status: "success",
@@ -576,7 +573,9 @@ const resendStudentInvite = async (req, res, next) => {
 
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
     const activationUrl = `${frontendUrl}/activate?token=${rawToken}`;
-    await sendInvitation(user.email, user.name, req.organization.name, activationUrl);
+    sendInvitation(user.email, user.name, req.organization.name, activationUrl).catch((err) =>
+      console.error("Invitation email failed:", err.message)
+    );
 
     res.status(200).json({
       status: "success",

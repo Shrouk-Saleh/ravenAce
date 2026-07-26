@@ -1,32 +1,22 @@
 const nodemailer = require("nodemailer");
 
-const isResend = process.env.EMAIL_PASS && process.env.EMAIL_PASS.startsWith("re_");
-
-const transporter = nodemailer.createTransport(
-  isResend
-    ? {
-        host: "smtp.resend.com",
-        port: 465,
-        secure: true,
-        auth: {
-          user: "resend",
-          pass: process.env.EMAIL_PASS,
-        },
-      }
-    : {
-        service: "gmail",
-        auth: {
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_PASS,
-        },
-      }
-);
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+  // Add aggressive timeouts so if Gmail drops the connection from Render,
+  // the app fails fast instead of hanging indefinitely.
+  connectionTimeout: 5000,
+  greetingTimeout: 5000,
+  socketTimeout: 5000,
+});
 
 // Sends a 6-digit OTP to the user's email address.
 const sendOTP = async (toEmail, otp) => {
-  const fromEmail = isResend ? "onboarding@resend.dev" : process.env.EMAIL_USER;
   await transporter.sendMail({
-    from: `"Exam System" <${fromEmail}>`,
+    from: `"Exam System" <${process.env.EMAIL_USER}>`,
     to: toEmail,
     subject: "Your Password Reset OTP",
     html: `
@@ -44,9 +34,8 @@ const sendOTP = async (toEmail, otp) => {
 // Sends an invitation email to a new user created by an organization.
 // The activationUrl contains a token that the user must use to set their password.
 const sendInvitation = async (toEmail, userName, orgName, activationUrl) => {
-  const fromEmail = isResend ? "onboarding@resend.dev" : process.env.EMAIL_USER;
   await transporter.sendMail({
-    from: `"Raven ACE" <${fromEmail}>`,
+    from: `"Raven ACE" <${process.env.EMAIL_USER}>`,
     to: toEmail,
     subject: `You've been invited to join ${orgName} on Raven ACE`,
     html: `
@@ -81,4 +70,3 @@ const sendInvitation = async (toEmail, userName, orgName, activationUrl) => {
 };
 
 module.exports = { sendOTP, sendInvitation };
-
