@@ -331,8 +331,26 @@ const tutorChat = async (req, res, next) => {
     const { examId, message } = req.body;
     if (!examId || !message) return next(new AppError("examId and message are required.", 400));
 
-    const exam = await Exam.findById(examId);
+    const exam = await Exam.findById(examId).populate("instructor");
     if (!exam) return next(new AppError("Exam not found.", 404));
+
+    // SECURITY: Must be published and within the student's organization
+    if (!exam.isPublished) {
+      return next(new AppError("Exam not found.", 404));
+    }
+    
+    const User = require("../models/User");
+    const reqUser = await User.findById(req.user._id);
+    const isAuthorizedForOrg = () => {
+      if (reqUser.organization) {
+        return exam.instructor.organization && exam.instructor.organization.toString() === reqUser.organization.toString();
+      }
+      return !exam.instructor.organization;
+    };
+
+    if (!isAuthorizedForOrg()) {
+      return next(new AppError("Not authorized to access AI Tutor for this exam.", 403));
+    }
 
     // Load conversation history
     const history = await ChatMessage.find({
@@ -488,10 +506,10 @@ const getCheatAnalysis = async (req, res, next) => {
 
     // SECURITY: Ownership check — load the attempt to verify exam ownership
     const attempt = await Attempt.findById(req.params.attemptId);
-    if (attempt) {
-      const ownerErr = await checkInstructorOwnership(req, attempt.exam);
-      if (ownerErr) return next(ownerErr);
-    }
+    if (!attempt) return next(new AppError("Attempt not found.", 404));
+
+    const ownerErr = await checkInstructorOwnership(req, attempt.exam);
+    if (ownerErr) return next(ownerErr);
     res.json({ status: "success", data: { analysis } });
   } catch (err) { next(err); }
 };
