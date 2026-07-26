@@ -405,6 +405,12 @@ const generateAiQuestions = async (req, res, next) => {
     const { topic, category, difficulty, mcqCount = 3, tfCount = 2, writtenCount = 1 } = req.body;
     if (!topic) return next(new AppError("topic is required.", 400));
 
+    const MAX_TOTAL_QUESTIONS = 60;
+    const totalCount = (mcqCount || 0) + (tfCount || 0) + (writtenCount || 0);
+    if (totalCount > MAX_TOTAL_QUESTIONS) {
+      return next(new AppError(`Cannot generate more than ${MAX_TOTAL_QUESTIONS} questions total at once.`, 400));
+    }
+
     const questions = await generateQuestions({
       topic, category, difficulty, mcqCount, tfCount, writtenCount,
       instructorId: req.user._id,
