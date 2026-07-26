@@ -75,7 +75,7 @@ app.use(cors({
 // Stripe webhook must use raw body before express.json() parses it
 app.use("/api/stripe/webhook", express.raw({ type: "application/json" }));
 
-app.use(express.json({ limit: '10kb' }));
+app.use(express.json({ limit: '100kb' }));
 // Sanitize all request bodies, params, and query strings.
 // Strips out any keys starting with '$' or containing '.' to prevent NoSQL injection.
 app.use(mongoSanitize());
