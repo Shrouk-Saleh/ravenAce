@@ -14,17 +14,25 @@ function InstructorResults() {
   const [totalPages, setTotalPages] = useState(1)
 
   useEffect(() => {
-    const load = async () => {
+    const fetchExam = async () => {
+      try {
+        const res = await api.get(`/exams/${examId}`)
+        setExam(res.data.data.exam)
+      } catch (err) {
+        console.error(err)
+      }
+    }
+    fetchExam()
+  }, [examId])
+
+  useEffect(() => {
+    const fetchAttempts = async () => {
       setLoading(true)
       try {
-        const [examRes, attRes] = await Promise.all([
-          api.get(`/exams/${examId}`),
-          api.get(`/results/exam/${examId}/attempts?page=${page}&limit=100`),
-        ])
-        setExam(examRes.data.data.exam)
-        setAttempts(attRes.data.data.attempts)
-        if (attRes.data.pagination) {
-          setTotalPages(attRes.data.pagination.pages)
+        const res = await api.get(`/results/exam/${examId}/attempts?page=${page}&limit=100`)
+        setAttempts(res.data.data.attempts)
+        if (res.data.pagination) {
+          setTotalPages(res.data.pagination.pages)
         }
       } catch (err) {
         console.error(err)
@@ -32,7 +40,7 @@ function InstructorResults() {
         setLoading(false)
       }
     }
-    load()
+    fetchAttempts()
   }, [examId, page])
 
   const handleExportCSV = async () => {
