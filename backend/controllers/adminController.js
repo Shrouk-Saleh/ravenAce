@@ -126,6 +126,13 @@ const deleteUser = async (req, res, next) => {
       Certificate.deleteMany({ student: user._id }),
       CheatLog.deleteMany({ student: user._id }),
     ]);
+    
+    // Decrement counter if user belongs to an organization
+    if (user.organization && (user.role === "instructor" || user.role === "student")) {
+      const incField = user.role === "instructor" ? "currentInstructorCount" : "currentStudentCount";
+      const Organization = require("../models/Organization");
+      await Organization.updateOne({ _id: user.organization }, { $inc: { [incField]: -1 } });
+    }
 
     // If the user was an org owner, deactivate their Organization
     if (user.role === "organization") {

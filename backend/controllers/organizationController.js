@@ -188,12 +188,17 @@ const createInstructor = async (req, res, next) => {
       return next(new AppError("Please provide name and email.", 400));
     }
 
-    // Check limit
-    const currentCount = await User.countDocuments({
-      organization: req.organization._id,
-      role: "instructor",
-    });
-    if (currentCount >= req.organization.maxInstructors) {
+    // Check limit atomically
+    const org = await Organization.findOneAndUpdate(
+      {
+        _id: req.organization._id,
+        $expr: { $lt: ["$currentInstructorCount", "$maxInstructors"] },
+      },
+      { $inc: { currentInstructorCount: 1 } },
+      { new: true }
+    );
+    
+    if (!org) {
       return next(
         new AppError(
           `Instructor limit reached (${req.organization.maxInstructors}). Upgrade your plan to add more instructors.`,
@@ -208,16 +213,23 @@ const createInstructor = async (req, res, next) => {
 
     // Create user with temporary password (will be overwritten on activation)
     const tempPassword = crypto.randomBytes(16).toString("hex") + "A1!";
-    const user = await User.create({
-      name,
-      email,
-      password: tempPassword,
-      role: "instructor",
-      organization: req.organization._id,
-      isInvited: true,
-      invitationToken: hashedToken,
-      invitationExpires: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
+    let user;
+    try {
+      user = await User.create({
+        name,
+        email,
+        password: tempPassword,
+        role: "instructor",
+        organization: req.organization._id,
+        isInvited: true,
+        invitationToken: hashedToken,
+        invitationExpires: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
+      });
+    } catch (createErr) {
+      // Rollback reservation
+      await Organization.updateOne({ _id: req.organization._id }, { $inc: { currentInstructorCount: -1 } });
+      throw createErr;
+    }
 
     // Send invitation email
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
@@ -327,6 +339,10 @@ const deleteInstructor = async (req, res, next) => {
     // Exams created by the instructor are also kept (instructors create content for the org).
 
     await user.deleteOne();
+    
+    // Decrement counter
+    const Organization = require("../models/Organization");
+    await Organization.updateOne({ _id: req.organization._id }, { $inc: { currentInstructorCount: -1 } });
 
     res.status(200).json({
       status: "success",
@@ -432,12 +448,17 @@ const createStudent = async (req, res, next) => {
       return next(new AppError("Please provide name and email.", 400));
     }
 
-    // Check limit
-    const currentCount = await User.countDocuments({
-      organization: req.organization._id,
-      role: "student",
-    });
-    if (currentCount >= req.organization.maxStudents) {
+    // Check limit atomically
+    const org = await Organization.findOneAndUpdate(
+      {
+        _id: req.organization._id,
+        $expr: { $lt: ["$currentStudentCount", "$maxStudents"] },
+      },
+      { $inc: { currentStudentCount: 1 } },
+      { new: true }
+    );
+    
+    if (!org) {
       return next(
         new AppError(
           `Student limit reached (${req.organization.maxStudents}). Upgrade your plan to add more students.`,
@@ -451,16 +472,23 @@ const createStudent = async (req, res, next) => {
     const hashedToken = crypto.createHash("sha256").update(rawToken).digest("hex");
 
     const tempPassword = crypto.randomBytes(16).toString("hex") + "A1!";
-    const user = await User.create({
-      name,
-      email,
-      password: tempPassword,
-      role: "student",
-      organization: req.organization._id,
-      isInvited: true,
-      invitationToken: hashedToken,
-      invitationExpires: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
+    let user;
+    try {
+      user = await User.create({
+        name,
+        email,
+        password: tempPassword,
+        role: "student",
+        organization: req.organization._id,
+        isInvited: true,
+        invitationToken: hashedToken,
+        invitationExpires: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
+      });
+    } catch (createErr) {
+      // Rollback reservation
+      await Organization.updateOne({ _id: req.organization._id }, { $inc: { currentStudentCount: -1 } });
+      throw createErr;
+    }
 
     // Send invitation email
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
