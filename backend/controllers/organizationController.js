@@ -536,11 +536,29 @@ const deleteStudent = async (req, res, next) => {
     const Notification = require("../models/Notification");
     const Certificate = require("../models/Certificate");
     const CheatLog = require("../models/CheatLog");
+    const AiAnalysis = require("../models/AiAnalysis");
+    const ChatMessage = require("../models/ChatMessage");
+    const PlagiarismReport = require("../models/PlagiarismReport");
     await Promise.all([
       Attempt.deleteMany({ student: user._id }),
       Notification.deleteMany({ user: user._id }),
       Certificate.deleteMany({ student: user._id }),
       CheatLog.deleteMany({ student: user._id }),
+      AiAnalysis.deleteMany({ student: user._id }),
+      ChatMessage.deleteMany({ student: user._id }),
+      (async () => {
+        const reports = await PlagiarismReport.find({
+          $or: [{ "pairs.student1": user._id }, { "pairs.student2": user._id }]
+        });
+        await Promise.all(reports.map(report => {
+          report.pairs = report.pairs.filter(p => 
+            p.student1?.toString() !== user._id.toString() && 
+            p.student2?.toString() !== user._id.toString()
+          );
+          report.flaggedCount = report.pairs.filter(p => p.flagged).length;
+          return report.save();
+        }));
+      })()
     ]);
 
     await user.deleteOne();
