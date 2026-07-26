@@ -25,7 +25,9 @@ const stripeRoutes = require("./routes/stripeRoutes");
 const secureSessionRoutes = require("./routes/secureSessionRoutes");
 
 const app = express();
-connectDB();
+if (process.env.NODE_ENV !== "test") {
+  connectDB();
+}
 
 // ── Startup env-var validation ───────────────────────────────────
 // Warn loudly if any Stripe key is missing so issues surface at boot,
@@ -121,4 +123,8 @@ const server = http.createServer(app);
 initSocket(server);
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT} (HTTP + Socket.io)`));
+if (require.main === module) {
+  server.listen(PORT, () => console.log(`Server running on port ${PORT} (HTTP + Socket.io)`));
+}
+
+module.exports = app;
