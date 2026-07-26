@@ -29,6 +29,9 @@ const getProfile = async (req, res, next) => {
 // @access  Organization only
 const updateProfile = async (req, res, next) => {
   try {
+    if (req.body.email) {
+      req.body.email = req.body.email.trim().toLowerCase();
+    }
     const allowedFields = [
       "name", "email", "phone", "address",
       "website", "description", "industry", "country",
@@ -168,7 +171,9 @@ const getInstructors = async (req, res, next) => {
 // @access  Organization only (active subscription)
 const createInstructor = async (req, res, next) => {
   try {
-    const { name, email } = req.body;
+    const { name } = req.body;
+    let { email } = req.body;
+    if (email) email = email.trim().toLowerCase();
     if (!name || !email) {
       return next(new AppError("Please provide name and email.", 400));
     }
@@ -245,7 +250,7 @@ const updateInstructor = async (req, res, next) => {
     const { name, email } = req.body;
     const updates = {};
     if (name) updates.name = name;
-    if (email) updates.email = email;
+    if (email) updates.email = email.trim().toLowerCase();
 
     const updatedUser = await User.findByIdAndUpdate(user._id, updates, { new: true, runValidators: true });
 
@@ -398,7 +403,9 @@ const getStudents = async (req, res, next) => {
 // @access  Organization only (active subscription)
 const createStudent = async (req, res, next) => {
   try {
-    const { name, email } = req.body;
+    const { name } = req.body;
+    let { email } = req.body;
+    if (email) email = email.trim().toLowerCase();
     if (!name || !email) {
       return next(new AppError("Please provide name and email.", 400));
     }
@@ -474,7 +481,7 @@ const updateStudent = async (req, res, next) => {
     const { name, email } = req.body;
     const updates = {};
     if (name) updates.name = name;
-    if (email) updates.email = email;
+    if (email) updates.email = email.trim().toLowerCase();
 
     const updatedUser = await User.findByIdAndUpdate(user._id, updates, { new: true, runValidators: true });
 

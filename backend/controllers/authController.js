@@ -85,7 +85,7 @@ const login = async (req, res, next) => {
 
     // .select('+password') overrides the 'select: false' on the schema.
     // Without it, user.password is undefined and bcrypt compare fails silently.
-    const user = await User.findOne({ email }).select("+password");
+    const user = await User.findOne({ email: email.trim().toLowerCase() }).select("+password");
 
     // Timing attack prevention:
     // If we return immediately for unknown emails (skipping the slow bcrypt step),
@@ -306,7 +306,7 @@ const verifyResetOTP = async (req, res, next) => {
     }
 
     // Explicitly select the hidden OTP fields (select: false on schema)
-    const user = await User.findOne({ email }).select(
+    const user = await User.findOne({ email: email.trim().toLowerCase() }).select(
       "+passwordResetOTP +passwordResetOTPExpires +passwordResetVerified"
     );
 
