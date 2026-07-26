@@ -77,6 +77,7 @@ const getExamById = async (req, res, next) => {
       .populate("questions");
 
     if (!exam) return next(new AppError("Exam not found.", 404));
+    if (!exam.instructor) return next(new AppError("Exam not found.", 404));
 
     // Fetch full user to get their organization
     const User = require("../models/User");
