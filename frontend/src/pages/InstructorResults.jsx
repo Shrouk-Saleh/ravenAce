@@ -10,16 +10,22 @@ function InstructorResults() {
   const [exam, setExam]         = useState(null)
   const [attempts, setAttempts] = useState([])
   const [loading, setLoading]   = useState(true)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
 
   useEffect(() => {
     const load = async () => {
+      setLoading(true)
       try {
         const [examRes, attRes] = await Promise.all([
           api.get(`/exams/${examId}`),
-          api.get(`/results/exam/${examId}/attempts`),
+          api.get(`/results/exam/${examId}/attempts?page=${page}&limit=100`),
         ])
         setExam(examRes.data.data.exam)
         setAttempts(attRes.data.data.attempts)
+        if (attRes.data.pagination) {
+          setTotalPages(attRes.data.pagination.pages)
+        }
       } catch (err) {
         console.error(err)
       } finally {
@@ -27,7 +33,7 @@ function InstructorResults() {
       }
     }
     load()
-  }, [examId])
+  }, [examId, page])
 
   const handleExportCSV = async () => {
     try {
@@ -188,6 +194,26 @@ function InstructorResults() {
               })}
             </tbody>
           </table>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-6 py-4 border-t border-outline-variant bg-surface-container-lowest">
+              <button 
+                disabled={page === 1}
+                onClick={() => setPage(p => p - 1)}
+                className="px-4 py-2 border border-outline-variant rounded-lg text-label-md disabled:opacity-50 hover:bg-surface-container transition-colors"
+              >
+                Previous
+              </button>
+              <span className="text-label-md text-on-surface-variant">Page {page} of {totalPages}</span>
+              <button 
+                disabled={page === totalPages}
+                onClick={() => setPage(p => p + 1)}
+                className="px-4 py-2 border border-outline-variant rounded-lg text-label-md disabled:opacity-50 hover:bg-surface-container transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          )}
         </div>
       )}
     </AppLayout>
