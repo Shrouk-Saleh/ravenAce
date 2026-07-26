@@ -122,16 +122,31 @@ const getExamAttempts = async (req, res, next) => {
       return next(new AppError("Not authorized for this exam.", 403));
     }
 
-    const attempts = await Attempt.find({
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 100;
+    const skip = (page - 1) * limit;
+
+    const filter = {
       exam: req.params.examId,
       status: { $ne: "in-progress" },
-    })
+    };
+
+    const total = await Attempt.countDocuments(filter);
+    const attempts = await Attempt.find(filter)
       .populate("student", "name email profilePhoto")
-      .sort({ score: -1, timeTaken: 1 }); // highest score first, fastest time as tiebreak
+      .sort({ score: -1, timeTaken: 1 })
+      .skip(skip)
+      .limit(limit);
 
     res.status(200).json({
       status: "success",
       results: attempts.length,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit)
+      },
       data: { attempts },
     });
   } catch (err) {
