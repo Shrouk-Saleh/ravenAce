@@ -76,4 +76,29 @@ describe("B5 Regression: Auth Email Case Insensitivity", () => {
     expect(verifyRes.body.status).toBe("success");
     expect(verifyRes.body.resetToken).toBeDefined();
   });
+
+  it("should automatically lowercase and trim emails on profile updates (Mongoose 8 native behavior)", async () => {
+    // First, login to get a token
+    const loginRes = await request(app).post("/api/auth/login").send({
+      email: testUser.emailLower,
+      password: testUser.password,
+    });
+    const token = loginRes.body.token;
+
+    // Send an update with spaces and mixed case
+    const weirdEmail = "   WEIRD.CaSe@EXAMPLE.COM   ";
+    const updateRes = await request(app)
+      .put("/api/users/me")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ email: weirdEmail });
+
+    expect(updateRes.status).toBe(200);
+    
+    // Check what the API returns
+    expect(updateRes.body.data.user.email).toBe("weird.case@example.com");
+
+    // Check directly in the database to be absolutely sure
+    const dbUser = await User.findById(loginRes.body.data.user._id);
+    expect(dbUser.email).toBe("weird.case@example.com");
+  });
 });
