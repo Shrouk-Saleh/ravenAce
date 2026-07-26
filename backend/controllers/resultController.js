@@ -9,6 +9,8 @@ const Attempt = require("../models/Attempt");
 const Exam = require("../models/Exam");
 const { AppError } = require("../utils/errorUtils");
 const { calculateScore } = require("./attemptController");
+const Certificate = require("../models/Certificate");
+const { createCertificateIfPassed } = require("./certificateController");
 
 // ────────────────────────────────────────────────────────────────
 // @desc    Get one attempt result for the logged-in student
@@ -379,6 +381,12 @@ const updateManualGrade = async (req, res, next) => {
     // markModified needed because we directly changed an object inside an array
     attempt.markModified("perQuestionResult");
     await attempt.save();
+
+    if (attempt.passed) {
+      await createCertificateIfPassed(attempt);
+    } else {
+      await Certificate.findOneAndDelete({ attempt: attempt._id });
+    }
 
     res.status(200).json({
       status: "success",
