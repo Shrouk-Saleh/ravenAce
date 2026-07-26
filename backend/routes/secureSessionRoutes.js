@@ -23,7 +23,7 @@ router.post("/validate", validateSecureSession);
 
 // Once validated, Electron uses the newly issued JWT for all subsequent calls
 router.get("/exam-data", protect, authorize("student"), getExamData);
-router.post("/launch-status", launchStatus);
+router.post("/launch-status", protect, authorize("student"), launchStatus);
 router.post("/heartbeat", protect, authorize("student"), secureHeartbeat);
 router.post("/event", protect, authorize("student"), logSecureEvent);
 router.post("/submit", protect, authorize("student"), submitSecureExam);

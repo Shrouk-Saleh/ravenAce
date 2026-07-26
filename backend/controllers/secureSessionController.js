@@ -148,6 +148,13 @@ const launchStatus = async (req, res, next) => {
 const getLaunchStatus = async (req, res, next) => {
   try {
     const { attemptId } = req.params;
+    
+    // SECURITY: Ensure the attempt belongs to the requesting user
+    const attempt = await Attempt.findById(attemptId).select("student");
+    if (!attempt || attempt.student.toString() !== req.user._id.toString()) {
+      return next(new AppError("Not authorized to view this session.", 403));
+    }
+
     const statusData = launchStatuses.get(attemptId);
 
     if (!statusData) {
@@ -273,7 +280,13 @@ const submitSecureExam = async (req, res, next) => {
 // ─────────────────────────────────────────────────────────────────────────────
 const getExamData = async (req, res, next) => {
   try {
+    const { attemptId } = req.query;
+    if (!attemptId) {
+      return next(new AppError("attemptId is required.", 400));
+    }
+
     const attempt = await Attempt.findOne({
+      _id: attemptId,
       student: req.user._id,
       status: "in-progress",
     })
