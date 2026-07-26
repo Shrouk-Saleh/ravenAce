@@ -182,10 +182,14 @@ const secureHeartbeat = async (req, res, next) => {
   try {
     const { attemptId } = req.body;
     
-    await Attempt.updateOne(
+    const result = await Attempt.updateOne(
       { _id: attemptId, student: req.user._id, status: "in-progress" },
       { $set: { lastSeen: new Date() } }
     );
+
+    if (result.matchedCount === 0) {
+      return next(new AppError("Attempt not found or already ended.", 404));
+    }
 
     res.status(200).json({ status: "success" });
   } catch (err) {
