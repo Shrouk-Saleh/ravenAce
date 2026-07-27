@@ -8,4 +8,7 @@ const router = express.Router();
 router.post("/hirehub/exams", integrationAuth, integrationController.createExam);
 router.post("/hirehub/invitations", integrationAuth, integrationController.inviteCandidate);
 
+// ── Public endpoints ──
+router.get("/invitations/:token/verify", integrationController.verifyInvitation);
+
 module.exports = router;

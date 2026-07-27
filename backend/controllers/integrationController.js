@@ -3,6 +3,9 @@ const Organization = require("../models/Organization");
 const User = require("../models/User");
 const Exam = require("../models/Exam");
 const Question = require("../models/Question");
+const ExamInvitation = require("../models/ExamInvitation");
+const crypto = require("crypto");
+const { sendExamInvitation } = require("../utils/emailService");
 const { AppError } = require("../utils/errorUtils");
 
 exports.createExam = async (req, res, next) => {
@@ -149,10 +152,6 @@ exports.inviteCandidate = async (req, res, next) => {
     }
 
     // 2. Enumeration-safe check for existing invitation
-    const ExamInvitation = require("../models/ExamInvitation");
-    const crypto = require("crypto");
-    const { sendExamInvitation } = require("../utils/emailService");
-
     let invitation = await ExamInvitation.findOne({ email, examId });
 
     if (invitation && invitation.status === "consumed") {
@@ -195,6 +194,48 @@ exports.inviteCandidate = async (req, res, next) => {
     }
 
     res.status(200).json({ status: "success", message: "Invitation processed." });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Public endpoint for the frontend to verify an invitation token
+exports.verifyInvitation = async (req, res, next) => {
+  try {
+    const { token } = req.params;
+    
+    if (!token) {
+      return next(new AppError("Token is required.", 400));
+    }
+
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+    
+    const invitation = await ExamInvitation.findOne({ tokenHash }).populate({
+      path: "examId",
+      select: "title certificateIssuerName"
+    });
+
+    if (!invitation) {
+      return next(new AppError("Invalid or expired invitation token.", 404));
+    }
+
+    if (invitation.expiresAt < Date.now()) {
+      return next(new AppError("This invitation has expired.", 400));
+    }
+
+    // We return the relevant data to the frontend so it can display the correct UI (Case A or Case B)
+    res.status(200).json({
+      status: "success",
+      data: {
+        email: invitation.email,
+        status: invitation.status,
+        exam: {
+          _id: invitation.examId._id,
+          title: invitation.examId.title,
+          companyName: invitation.examId.certificateIssuerName
+        }
+      }
+    });
   } catch (err) {
     next(err);
   }
