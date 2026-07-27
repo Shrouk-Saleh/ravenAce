@@ -88,4 +88,34 @@ const sendInvitation = (toEmail, userName, orgName, activationUrl) =>
     `,
   });
 
-module.exports = { sendOTP, sendInvitation };
+// Sends an exam invitation to a candidate
+const sendExamInvitation = (toEmail, examTitle, companyName, inviteUrl) =>
+  sendEmail({
+    to: toEmail,
+    subject: `You have been invited to take the "${examTitle}" exam by ${companyName}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 520px; margin: auto; padding: 32px; background: #f9fafb; border-radius: 12px;">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <h2 style="color: #0c1d3a; margin: 0;">Exam Invitation</h2>
+          <p style="color: #6b7280; margin-top: 4px;">Raven ACE & ${companyName}</p>
+        </div>
+        <p style="color: #374151;">Hello,</p>
+        <p style="color: #374151;">
+          <strong>${companyName}</strong> has invited you to complete the <strong>"${examTitle}"</strong> assessment.
+          Click the button below to start your exam.
+        </p>
+        <div style="text-align: center; margin: 32px 0;">
+          <a href="${inviteUrl}"
+             style="display: inline-block; padding: 14px 32px; background: #0c1d3a; color: #ffffff;
+                    text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+            Start Assessment
+          </a>
+        </div>
+        <p style="color: #9ca3af; font-size: 13px;">
+          This invitation link expires in <strong>7 days</strong>.
+        </p>
+      </div>
+    `,
+  });
+
+module.exports = { sendOTP, sendInvitation, sendExamInvitation };

@@ -117,3 +117,87 @@ exports.createExam = async (req, res, next) => {
   }
 };
 
+exports.inviteCandidate = async (req, res, next) => {
+  try {
+    let { email, examId, externalCompanyId } = req.body;
+
+    if (!email || !examId || !externalCompanyId) {
+      return next(new AppError("email, examId, and externalCompanyId are required.", 400));
+    }
+
+    // Normalization: trim and lower case
+    email = email.trim().toLowerCase();
+
+    // 1. Authorization: check integration company matches the exam's instructor
+    const integrationCompany = await IntegrationCompany.findOne({
+      provider: req.integration.provider,
+      externalCompanyId
+    });
+
+    if (!integrationCompany) {
+      return next(new AppError("Company mapping not found. Cannot invite candidates.", 404));
+    }
+
+    const exam = await Exam.findById(examId);
+    if (!exam) {
+      return next(new AppError("Exam not found.", 404));
+    }
+
+    // Defense in depth: Check both instructor AND source
+    if (exam.instructor.toString() !== integrationCompany.systemInstructorId.toString() || exam.source !== "hirehub") {
+      return next(new AppError("Unauthorized to invite candidates for this exam.", 403));
+    }
+
+    // 2. Enumeration-safe check for existing invitation
+    const ExamInvitation = require("../models/ExamInvitation");
+    const crypto = require("crypto");
+    const { sendExamInvitation } = require("../utils/emailService");
+
+    let invitation = await ExamInvitation.findOne({ email, examId });
+
+    if (invitation && invitation.status === "consumed") {
+      // Already consumed: enumeration-safe silent success
+      return res.status(200).json({ status: "success", message: "Invitation processed." });
+    }
+
+    // 3. Create or Update Token
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+    
+    // Exact 7 days expiration
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    if (invitation) {
+      // Overwrite the existing token, effectively invalidating the old one
+      invitation.tokenHash = tokenHash;
+      invitation.expiresAt = expiresAt;
+      invitation.status = "pending";
+      await invitation.save();
+    } else {
+      invitation = await ExamInvitation.create({
+        email,
+        examId,
+        tokenHash,
+        expiresAt
+      });
+    }
+
+    // 4. Send Email
+    const inviteUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/invite/${rawToken}`;
+    const companyName = exam.certificateIssuerName || "Our Partner";
+    
+    try {
+      await sendExamInvitation(email, exam.title, companyName, inviteUrl);
+    } catch (error) {
+      console.error("Error sending exam invitation email:", error);
+      // In production, you might not want to return 500 if it's an email failure,
+      // but we will let it pass or fail here based on the requirement.
+    }
+
+    res.status(200).json({ status: "success", message: "Invitation processed." });
+  } catch (err) {
+    next(err);
+  }
+};
+
+

@@ -6,5 +6,6 @@ const router = express.Router();
 
 // ── Server-to-server endpoints (requires API Key) ──
 router.post("/hirehub/exams", integrationAuth, integrationController.createExam);
+router.post("/hirehub/invitations", integrationAuth, integrationController.inviteCandidate);
 
 module.exports = router;
