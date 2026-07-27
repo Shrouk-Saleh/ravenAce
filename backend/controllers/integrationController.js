@@ -71,15 +71,16 @@ exports.createExam = async (req, res, next) => {
     const createdQuestions = [];
 
     for (const q of questions) {
+      if (q.maxScore === undefined || q.maxScore === null) {
+        return next(new AppError("maxScore is required for every question.", 400));
+      }
+
       const questionData = { instructor: systemInstructorId };
       allowedQuestionFields.forEach((f) => {
         if (q[f] !== undefined) questionData[f] = q[f];
       });
       
-      // Default maxScore if not provided (assume 10 points per question by default)
-      const qScore = questionData.maxScore || 10;
-      questionData.maxScore = qScore;
-      calculatedTotalScore += qScore;
+      calculatedTotalScore += q.maxScore;
       
       const newQuestion = await Question.create(questionData);
       createdQuestions.push(newQuestion._id);

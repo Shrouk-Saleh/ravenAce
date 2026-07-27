@@ -46,6 +46,26 @@ const examSchema = new mongoose.Schema(
       enum: ["browser", "lockdown"],
       default: "browser",
     },
+    
+    // Internal tracking for exams created via integration (e.g. HireHub)
+    source: {
+      type: String,
+      enum: ["internal", "hirehub"],
+      default: "internal"
+    },
+    
+    // Explicit visibility flag to prevent accidental exposure in public listings
+    visibility: { 
+      type: String, 
+      enum: ["public", "private"], 
+      default: "public" 
+    },
+    
+    // Override for the organization name on the certificate
+    certificateIssuerName: { 
+      type: String, 
+      default: null 
+    },
   },
   { timestamps: true }
 );
