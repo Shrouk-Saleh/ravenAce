@@ -23,6 +23,7 @@ const aiRoutes = require("./routes/aiRoutes");
 const organizationRoutes = require("./routes/organizationRoutes");
 const stripeRoutes = require("./routes/stripeRoutes");
 const secureSessionRoutes = require("./routes/secureSessionRoutes");
+const integrationRoutes = require("./routes/integrationRoutes");
 
 const app = express();
 if (process.env.NODE_ENV !== "test") {
@@ -103,6 +104,7 @@ app.use("/api/ai", aiRoutes);
 app.use("/api/organization", organizationRoutes);
 app.use("/api/stripe", stripeRoutes);
 app.use("/api/secure-session", secureSessionRoutes);
+app.use("/api/integrations", integrationRoutes);
 
 // ── Serve React frontend in production ──────────────────────────
 // Serves the pre-built frontend whenever the dist folder exists,
