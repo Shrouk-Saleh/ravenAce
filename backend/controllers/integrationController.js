@@ -477,24 +477,20 @@ exports.getInvitationResult = async (req, res, next) => {
       return next(new AppError("invitationId is required.", 400));
     }
 
-    // 1. Fetch integration company for auth check
-    const integrationCompany = await IntegrationCompany.findOne({
-      provider: req.integration.provider
-    });
-
-    if (!integrationCompany) {
-      return next(new AppError("Integration mapping not found.", 404));
-    }
-
-    // 2. Fetch invitation and populate exam
+    // 1. Fetch invitation and populate exam
     const invitation = await ExamInvitation.findById(invitationId).populate("examId");
 
     if (!invitation || !invitation.examId) {
       return next(new AppError("Invitation or associated exam not found.", 404));
     }
 
-    // 3. Security Check: ensure this API key owns this exam
-    if (invitation.examId.instructor.toString() !== integrationCompany.systemInstructorId.toString()) {
+    // 2. Security Check: ensure this API key (provider) actually owns the instructor of this exam
+    const integrationCompany = await IntegrationCompany.findOne({
+      provider: req.integration.provider,
+      systemInstructorId: invitation.examId.instructor
+    });
+
+    if (!integrationCompany) {
       return next(new AppError("Unauthorized to view results for this invitation.", 403));
     }
 
