@@ -46,9 +46,13 @@ const createCertificateIfPassed = async (attempt) => {
 const getMyCertificates = async (req, res, next) => {
   try {
     const certs = await Certificate.find({ student: req.user._id })
-      .populate("exam",    "title category description certificateIssuerName")
+      .populate("exam",    "title category description instructor certificateIssuerName")
       .populate("student", "name email")
       .populate("organization", "name logo")
+      .populate({
+        path: "exam",
+        populate: { path: "instructor", select: "name" },
+      })
       .sort({ issuedAt: -1 });
 
     res.status(200).json({
