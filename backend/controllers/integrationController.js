@@ -241,4 +241,53 @@ exports.verifyInvitation = async (req, res, next) => {
   }
 };
 
+// Protected endpoint to consume an invitation (Candidate must be logged in)
+exports.consumeInvitation = async (req, res, next) => {
+  try {
+    const { token } = req.params;
+    
+    if (!token) {
+      return next(new AppError("Token is required.", 400));
+    }
+
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+    const invitation = await ExamInvitation.findOne({ tokenHash });
+
+    if (!invitation) {
+      return next(new AppError("Invalid or expired invitation token.", 404));
+    }
+
+    if (invitation.status === "consumed") {
+      return res.status(200).json({
+        status: "success",
+        message: "Invitation already consumed.",
+        data: { examId: invitation.examId }
+      });
+    }
+
+    if (invitation.expiresAt < Date.now()) {
+      return next(new AppError("This invitation has expired.", 400));
+    }
+
+    // Server-side cross-check: The logged-in user's email MUST match the invitation's email
+    if (req.user.email.toLowerCase() !== invitation.email.toLowerCase()) {
+      return next(new AppError("This invitation was sent to a different email address.", 403));
+    }
+
+    // Consume the invitation
+    invitation.status = "consumed";
+    invitation.consumedAt = Date.now();
+    invitation.ravenAceUserId = req.user._id;
+    await invitation.save();
+
+    res.status(200).json({
+      status: "success",
+      message: "Invitation consumed successfully.",
+      data: { examId: invitation.examId }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 

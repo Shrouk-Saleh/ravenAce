@@ -20,6 +20,7 @@ import AttemptHistory   from './pages/AttemptHistory'
 // Shared & Public
 import Profile           from './pages/Profile'
 import ActivateAccount   from './pages/ActivateAccount'
+import InvitePage        from './pages/InvitePage'
 import { Unauthorized, NotFound } from './pages/ErrorPages'
 
 // ── Lazy Loaded Routes (to reduce initial bundle size) ──
@@ -181,6 +182,9 @@ function App() {
           } />
           <Route path="/profile" element={
             <ProtectedRoute><Profile /></ProtectedRoute>
+          } />
+          <Route path="/invite/:token" element={
+            <InvitePage />
           } />
 
           {/* ── Errors ──────────────────────────────────────── */}

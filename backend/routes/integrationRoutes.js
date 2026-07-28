@@ -1,4 +1,5 @@
 const express = require("express");
+const { protect } = require("../middleware/authMiddleware");
 const { integrationAuth } = require("../middleware/integrationAuth");
 const integrationController = require("../controllers/integrationController");
 
@@ -10,5 +11,8 @@ router.post("/hirehub/invitations", integrationAuth, integrationController.invit
 
 // ── Public endpoints ──
 router.get("/invitations/:token/verify", integrationController.verifyInvitation);
+
+// ── Protected endpoints (Requires user login) ──
+router.post("/invitations/:token/consume", protect, integrationController.consumeInvitation);
 
 module.exports = router;
