@@ -6,12 +6,21 @@ import { useAuth } from "../context/AuthContext";
 const InvitePage = () => {
   const { token } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, login } = useAuth();
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [invitationData, setInvitationData] = useState(null);
+  
+  // Case A state
   const [consuming, setConsuming] = useState(false);
+  
+  // Case B states
+  const [caseBView, setCaseBView] = useState("selection"); // 'selection' | 'register' | 'otp'
+  const [formData, setFormData] = useState({ name: "", password: "", confirmPassword: "" });
+  const [otp, setOtp] = useState("");
+  const [caseBSubmitting, setCaseBSubmitting] = useState(false);
+  const [caseBError, setCaseBError] = useState(null);
 
   useEffect(() => {
     const verifyToken = async () => {
@@ -28,6 +37,7 @@ const InvitePage = () => {
     verifyToken();
   }, [token]);
 
+  // --- Case A Handlers ---
   const handleConsume = async () => {
     setConsuming(true);
     setError(null);
@@ -46,10 +56,56 @@ const InvitePage = () => {
     }
   };
 
+  // --- Case B Handlers ---
+  const handleRegisterSubmit = async (e) => {
+    e.preventDefault();
+    setCaseBError(null);
+
+    if (formData.password !== formData.confirmPassword) {
+      return setCaseBError("Passwords do not match.");
+    }
+
+    setCaseBSubmitting(true);
+    try {
+      await api.post(`/integrations/invitations/${token}/register`, {
+        name: formData.name,
+        password: formData.password,
+      });
+      // On success, move to OTP view
+      setCaseBView("otp");
+    } catch (err) {
+      setCaseBError(err.response?.data?.message || "Registration failed. Please try again.");
+    } finally {
+      setCaseBSubmitting(false);
+    }
+  };
+
+  const handleOtpSubmit = async (e) => {
+    e.preventDefault();
+    setCaseBError(null);
+    setCaseBSubmitting(true);
+
+    try {
+      const response = await api.post(`/integrations/invitations/${token}/verify-otp`, { otp });
+      const { user: newUser, examId } = response.data.data;
+      const { token: jwtToken } = response.data;
+      
+      // Log the user in globally using AuthContext
+      login(newUser, jwtToken);
+      
+      // Navigate to the exam
+      navigate(`/exams/${examId}`);
+    } catch (err) {
+      setCaseBError(err.response?.data?.message || "Invalid OTP. Please try again.");
+    } finally {
+      setCaseBSubmitting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-gray-50">
-        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
   }
@@ -68,15 +124,15 @@ const InvitePage = () => {
               You are currently logged in as <strong>{user.email}</strong>.
             </p>
           )}
-          <Link to="/" className="inline-block w-full py-3 px-4 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium">
+          <button onClick={() => navigate("/")} className="inline-block w-full py-3 px-4 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium">
             Return Home
-          </Link>
+          </button>
         </div>
       </div>
     );
   }
 
-  // If already consumed and user happens to click the link again, they might just see "already consumed" error from verify endpoint or we handle it here
+  // Already consumed handler
   if (invitationData?.status === "consumed") {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-gray-50 p-4">
@@ -88,7 +144,7 @@ const InvitePage = () => {
           <p className="text-gray-600 mb-6">This invitation has already been used.</p>
           <button 
             onClick={() => navigate(`/exams/${invitationData.exam._id}`)}
-            className="w-full py-3 px-4 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-medium"
+            className="w-full py-3 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
           >
             Go to Exam
           </button>
@@ -145,31 +201,137 @@ const InvitePage = () => {
         ) : (
           /* CASE B: User is NOT logged in */
           <div className="space-y-4">
-            <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100/50 mb-6">
-              <p className="text-sm text-gray-600 text-center">
-                To accept this invitation for <strong>{invitationData.email}</strong>, you need an account.
-              </p>
-            </div>
             
-            <Link 
-              to={`/login?returnUrl=/invite/${token}`}
-              className="block w-full text-center py-3.5 px-4 bg-white border-2 border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50 rounded-xl font-medium transition-all"
-            >
-              Log in with existing account
-            </Link>
+            {caseBView === "selection" && (
+              <>
+                <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100/50 mb-6">
+                  <p className="text-sm text-gray-600 text-center">
+                    To accept this invitation for <strong>{invitationData.email}</strong>, you need an account.
+                  </p>
+                </div>
+                
+                <Link 
+                  to={`/login?returnUrl=/invite/${token}`}
+                  className="block w-full text-center py-3.5 px-4 bg-white border-2 border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50 rounded-xl font-medium transition-all"
+                >
+                  Log in with existing account
+                </Link>
 
-            <div className="relative flex items-center py-2">
-              <div className="flex-grow border-t border-gray-200"></div>
-              <span className="flex-shrink-0 mx-4 text-gray-400 text-sm font-medium">OR</span>
-              <div className="flex-grow border-t border-gray-200"></div>
-            </div>
+                <div className="relative flex items-center py-2">
+                  <div className="flex-grow border-t border-gray-200"></div>
+                  <span className="flex-shrink-0 mx-4 text-gray-400 text-sm font-medium">OR</span>
+                  <div className="flex-grow border-t border-gray-200"></div>
+                </div>
 
-            <button
-              onClick={() => alert("Account creation logic (Case B) will be implemented in the next step.")}
-              className="w-full py-3.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-all shadow-sm shadow-blue-200"
-            >
-              Create a new account
-            </button>
+                <button
+                  onClick={() => setCaseBView("register")}
+                  className="w-full py-3.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-all shadow-sm shadow-blue-200"
+                >
+                  Create a new account
+                </button>
+              </>
+            )}
+
+            {caseBView === "register" && (
+              <form onSubmit={handleRegisterSubmit} className="space-y-4">
+                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 mb-4 flex justify-between items-center">
+                  <div>
+                    <p className="text-xs text-gray-500 font-medium">Creating account for</p>
+                    <p className="text-sm font-semibold text-gray-900">{invitationData.email}</p>
+                  </div>
+                  <button type="button" onClick={() => setCaseBView("selection")} className="text-sm text-blue-600 hover:underline font-medium">Back</button>
+                </div>
+
+                {caseBError && <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100">{caseBError}</div>}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all"
+                    placeholder="John Doe"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all"
+                    placeholder="••••••••"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    value={formData.confirmPassword}
+                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all"
+                    placeholder="••••••••"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={caseBSubmitting}
+                  className="w-full mt-2 py-3.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-all shadow-sm shadow-blue-200 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center"
+                >
+                  {caseBSubmitting ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : "Continue"}
+                </button>
+              </form>
+            )}
+
+            {caseBView === "otp" && (
+              <form onSubmit={handleOtpSubmit} className="space-y-4 text-center">
+                <div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100/50 mb-2">
+                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm text-blue-600">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                  </div>
+                  <h3 className="font-semibold text-gray-900 mb-1">Check your email</h3>
+                  <p className="text-sm text-gray-600">We sent a 6-digit verification code to<br/><strong className="text-gray-900">{invitationData.email}</strong></p>
+                </div>
+
+                {caseBError && <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100 text-left">{caseBError}</div>}
+
+                <div className="text-left">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Verification Code</label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))} // only digits
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all text-center text-xl tracking-widest font-mono"
+                    placeholder="000000"
+                  />
+                </div>
+                
+                <button
+                  type="submit"
+                  disabled={caseBSubmitting || otp.length !== 6}
+                  className="w-full mt-2 py-3.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-all shadow-sm shadow-blue-200 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center"
+                >
+                  {caseBSubmitting ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : "Verify & Start Exam"}
+                </button>
+                
+                <button 
+                  type="button" 
+                  onClick={() => setCaseBView("selection")} 
+                  className="mt-4 text-sm text-gray-500 hover:text-gray-900 transition-colors"
+                >
+                  Cancel
+                </button>
+              </form>
+            )}
+
           </div>
         )}
       </div>
