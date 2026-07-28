@@ -156,7 +156,11 @@ exports.inviteCandidate = async (req, res, next) => {
 
     if (invitation && invitation.status === "consumed") {
       // Already consumed: enumeration-safe silent success
-      return res.status(200).json({ status: "success", message: "Invitation processed." });
+      return res.status(200).json({ 
+        status: "success", 
+        message: "Invitation processed.",
+        data: { invitationId: invitation._id }
+      });
     }
 
     // 3. Create or Update Token
@@ -193,7 +197,11 @@ exports.inviteCandidate = async (req, res, next) => {
       // but we will let it pass or fail here based on the requirement.
     }
 
-    res.status(200).json({ status: "success", message: "Invitation processed." });
+    res.status(200).json({ 
+      status: "success", 
+      message: "Invitation processed.",
+      data: { invitationId: invitation._id }
+    });
   } catch (err) {
     next(err);
   }
@@ -457,6 +465,99 @@ exports.verifyCandidateOTP = async (req, res, next) => {
     if (err.code === 11000) {
       return next(new AppError("User with this email already exists.", 400));
     }
+    next(err);
+  }
+};
+
+exports.getInvitationResult = async (req, res, next) => {
+  try {
+    const { invitationId } = req.params;
+
+    if (!invitationId) {
+      return next(new AppError("invitationId is required.", 400));
+    }
+
+    // 1. Fetch integration company for auth check
+    const integrationCompany = await IntegrationCompany.findOne({
+      provider: req.integration.provider
+    });
+
+    if (!integrationCompany) {
+      return next(new AppError("Integration mapping not found.", 404));
+    }
+
+    // 2. Fetch invitation and populate exam
+    const invitation = await ExamInvitation.findById(invitationId).populate("examId");
+
+    if (!invitation || !invitation.examId) {
+      return next(new AppError("Invitation or associated exam not found.", 404));
+    }
+
+    // 3. Security Check: ensure this API key owns this exam
+    if (invitation.examId.instructor.toString() !== integrationCompany.systemInstructorId.toString()) {
+      return next(new AppError("Unauthorized to view results for this invitation.", 403));
+    }
+
+    // 4. Status mapping logic
+    if (invitation.status !== "consumed") {
+      // Pending or expired -> has not opened link / logged in
+      return res.status(200).json({
+        status: "success",
+        data: { status: "not_started" }
+      });
+    }
+
+    // Invitation is consumed: User logged in / registered. Look for an Attempt.
+    const Attempt = require("../models/Attempt");
+    
+    // Sort by createdAt descending to get the latest attempt if there are multiple
+    const attempt = await Attempt.findOne({
+      student: invitation.ravenAceUserId,
+      exam: invitation.examId._id
+    }).sort({ createdAt: -1 });
+
+    if (!attempt) {
+      // Consumed but no attempt started yet
+      return res.status(200).json({
+        status: "success",
+        data: { status: "registered" }
+      });
+    }
+
+    // Attempt exists. Map the complex enum to a simple one for HireHub.
+    let mappedStatus;
+    switch (attempt.status) {
+      case "in-progress":
+        mappedStatus = "in_progress";
+        break;
+      case "grading":
+        mappedStatus = "grading";
+        break;
+      case "submitted":
+      case "auto-submitted":
+      case "timed-out":
+        mappedStatus = "completed";
+        break;
+      case "abandoned":
+      case "error":
+      default:
+        mappedStatus = "error";
+        break;
+    }
+
+    const responseData = { status: mappedStatus };
+
+    // If completed, append the scores
+    if (mappedStatus === "completed") {
+      responseData.score = attempt.score;
+      responseData.passed = attempt.passed;
+    }
+
+    res.status(200).json({
+      status: "success",
+      data: responseData
+    });
+  } catch (err) {
     next(err);
   }
 };
