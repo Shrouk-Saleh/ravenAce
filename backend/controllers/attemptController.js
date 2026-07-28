@@ -290,18 +290,27 @@ const startExam = async (req, res, next) => {
     const User = require("../models/User");
     const student = await User.findById(req.user._id);
 
-    if (student.organization) {
-      // Student is in an org. Instructor must be in the SAME org.
-      if (
-        !exam.instructor.organization ||
-        exam.instructor.organization.toString() !== student.organization.toString()
-      ) {
-        return next(new AppError("Not authorized to take this exam.", 403));
-      }
-    } else {
-      // Student is public. Instructor must also be public.
-      if (exam.instructor.organization) {
-        return next(new AppError("Not authorized to take this exam.", 403));
+    const ExamInvitation = require("../models/ExamInvitation");
+    const hasConsumedInvitation = await ExamInvitation.findOne({
+      examId: exam._id,
+      ravenAceUserId: req.user._id,
+      status: "consumed"
+    });
+
+    if (!hasConsumedInvitation) {
+      if (student.organization) {
+        // Student is in an org. Instructor must be in the SAME org.
+        if (
+          !exam.instructor.organization ||
+          exam.instructor.organization.toString() !== student.organization.toString()
+        ) {
+          return next(new AppError("Not authorized to take this exam.", 403));
+        }
+      } else {
+        // Student is public. Instructor must also be public.
+        if (exam.instructor.organization) {
+          return next(new AppError("Not authorized to take this exam.", 403));
+        }
       }
     }
 

@@ -37,6 +37,7 @@ const getAllExams = async (req, res, next) => {
         
         exams = await Exam.find({ 
           isPublished: true,
+          visibility: "public",
           instructor: { $in: instructorIds }
         }).populate("instructor", "name");
       } else {
@@ -50,6 +51,7 @@ const getAllExams = async (req, res, next) => {
 
         exams = await Exam.find({ 
           isPublished: true,
+          visibility: "public",
           instructor: { $in: publicInstructorIds }
         }).populate("instructor", "name");
       }
@@ -95,7 +97,14 @@ const getExamById = async (req, res, next) => {
     if (req.user.role === 'student') {
       if (!exam.isPublished) return next(new AppError("Exam not found.", 404));
       
-      if (!isAuthorizedForOrg()) {
+      const ExamInvitation = require("../models/ExamInvitation");
+      const hasConsumedInvitation = await ExamInvitation.findOne({
+        examId: exam._id,
+        ravenAceUserId: req.user._id,
+        status: "consumed"
+      });
+
+      if (!hasConsumedInvitation && !isAuthorizedForOrg()) {
         return next(new AppError("Not authorized to view this exam.", 403));
       }
 
