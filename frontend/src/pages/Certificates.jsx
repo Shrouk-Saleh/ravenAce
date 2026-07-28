@@ -36,7 +36,9 @@ function CertificateContent({ cert, studentName }) {
               <img src="/logo.png" alt="Logo" className="w-16 h-16 md:w-20 md:h-20 object-contain" />
             )}
             <span className="font-sans text-lg md:text-2xl font-extrabold tracking-[0.25em] text-[#0c1d3a] text-center">
-              {cert.organization?.name ? cert.organization.name.toUpperCase() : "RAVEN ACE"}
+              {cert.exam?.certificateIssuerName 
+                ? cert.exam.certificateIssuerName.toUpperCase() 
+                : (cert.organization?.name ? cert.organization.name.toUpperCase() : "RAVEN ACE")}
             </span>
           </div>
           <span className="font-sans text-[10px] md:text-xs tracking-[0.25em] font-bold text-amber-700 uppercase">Certificate of Achievement</span>
@@ -64,7 +66,7 @@ function CertificateContent({ cert, studentName }) {
           {/* Left Column: Signature */}
           <div className="flex flex-col items-center justify-end h-full">
             <span className="font-['Great_Vibes'] text-2xl md:text-3xl text-slate-800 leading-none">
-              {cert.exam?.instructor?.name || "Benjamin"}
+              {cert.exam?.certificateIssuerName || cert.exam?.instructor?.name || "Benjamin"}
             </span>
             <div className="w-24 h-px bg-slate-300 my-1" />
             <span className="text-[9px] md:text-[10px] text-slate-400 font-sans uppercase tracking-wider">Authorized Signature</span>
