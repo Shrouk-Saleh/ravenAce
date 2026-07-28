@@ -241,6 +241,18 @@ exports.verifyInvitation = async (req, res, next) => {
   }
 };
 
+// --- Helper function for robust consumption logic ---
+// Can throw an AppError which is caught by the calling endpoint's catch block.
+const consumeInvitationLogic = async (invitation, userEmail, userId) => {
+  if (userEmail.toLowerCase() !== invitation.email.toLowerCase()) {
+    throw new AppError("This invitation was sent to a different email address.", 403);
+  }
+  invitation.status = "consumed";
+  invitation.consumedAt = Date.now();
+  invitation.ravenAceUserId = userId;
+  await invitation.save();
+};
+
 // Protected endpoint to consume an invitation (Candidate must be logged in)
 exports.consumeInvitation = async (req, res, next) => {
   try {
@@ -269,16 +281,8 @@ exports.consumeInvitation = async (req, res, next) => {
       return next(new AppError("This invitation has expired.", 400));
     }
 
-    // Server-side cross-check: The logged-in user's email MUST match the invitation's email
-    if (req.user.email.toLowerCase() !== invitation.email.toLowerCase()) {
-      return next(new AppError("This invitation was sent to a different email address.", 403));
-    }
-
-    // Consume the invitation
-    invitation.status = "consumed";
-    invitation.consumedAt = Date.now();
-    invitation.ravenAceUserId = req.user._id;
-    await invitation.save();
+    // Call the shared helper
+    await consumeInvitationLogic(invitation, req.user.email, req.user._id);
 
     res.status(200).json({
       status: "success",
@@ -286,6 +290,176 @@ exports.consumeInvitation = async (req, res, next) => {
       data: { examId: invitation.examId }
     });
   } catch (err) {
+    next(err);
+  }
+};
+
+// ── Case B: Public endpoint to register a new user using an invitation token ──
+exports.registerCandidate = async (req, res, next) => {
+  try {
+    const { token } = req.params;
+    const { name, password } = req.body; // email is INTENTIONALLY omitted from req.body
+
+    if (!token || !name || !password) {
+      return next(new AppError("Token, name, and password are required.", 400));
+    }
+
+    if (password.length < 8) {
+      return next(new AppError("Password must be at least 8 characters.", 400));
+    }
+
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+    const invitation = await ExamInvitation.findOne({ tokenHash });
+
+    if (!invitation) {
+      return next(new AppError("Invalid or expired invitation token.", 404));
+    }
+
+    if (invitation.status !== "pending") {
+      return next(new AppError("This invitation is no longer active or has already been consumed.", 400));
+    }
+    
+    if (invitation.expiresAt < Date.now()) {
+      return next(new AppError("This invitation has expired.", 400));
+    }
+
+    const bcrypt = require("bcryptjs"); // require here or at top of file, doing here for isolation just like crypto
+    
+    // 1. Temporarily store name and password (Hashed with 10 rounds to match User model)
+    invitation.tempName = name;
+    invitation.tempPasswordHash = await bcrypt.hash(password, 10);
+
+    // 2. Generate and store OTP (same logic as forgotPassword)
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashedOTP = crypto.createHash("sha256").update(otp).digest("hex");
+
+    invitation.registrationOTP = hashedOTP;
+    invitation.registrationOTPExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
+    invitation.registrationOTPVerified = false;
+
+    // Save with validateBeforeSave: false since we're using partial schema validations
+    await invitation.save({ validateBeforeSave: false });
+
+    // 3. Send OTP email
+    const { sendOTP } = require("../utils/emailService");
+    try {
+      await sendOTP(invitation.email, otp);
+      console.log(`[EmailService] Registration OTP successfully sent to ${invitation.email}`);
+    } catch (emailErr) {
+      console.error("[EmailService] Failed to send Registration OTP email:", emailErr);
+      invitation.registrationOTP = undefined;
+      invitation.registrationOTPExpires = undefined;
+      await invitation.save({ validateBeforeSave: false });
+      return next(new AppError("Failed to send OTP email. Please check server email config.", 500));
+    }
+
+    res.status(200).json({
+      status: "success",
+      message: "An OTP has been sent to your email to verify your registration.",
+      // Notice we do not return the email here either; frontend should know it from the /verify call
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── Case B: Public endpoint to verify OTP and complete registration ──
+exports.verifyCandidateOTP = async (req, res, next) => {
+  try {
+    const { token } = req.params;
+    const { otp } = req.body;
+
+    if (!token || !otp) {
+      return next(new AppError("Token and OTP are required.", 400));
+    }
+
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+    
+    // Explicitly select the hidden temporary and OTP fields
+    const invitation = await ExamInvitation.findOne({ tokenHash }).select(
+      "+registrationOTP +registrationOTPExpires +registrationOTPVerified +tempName +tempPasswordHash"
+    );
+
+    if (!invitation || !invitation.registrationOTP) {
+      return next(new AppError("Invalid token or no OTP was requested.", 400));
+    }
+
+    if (invitation.status !== "pending") {
+      return next(new AppError("This invitation is no longer active.", 400));
+    }
+    
+    // Double check invitation expiration
+    if (invitation.expiresAt < Date.now()) {
+      return next(new AppError("This invitation has expired.", 400));
+    }
+
+    // Check OTP expiration
+    if (Date.now() > invitation.registrationOTPExpires) {
+      invitation.registrationOTP = undefined;
+      invitation.registrationOTPExpires = undefined;
+      await invitation.save({ validateBeforeSave: false });
+      return next(new AppError("OTP has expired. Please request a new one.", 400));
+    }
+
+    // Hash incoming OTP and compare
+    const hashedIncoming = crypto.createHash("sha256").update(String(otp)).digest("hex");
+    if (hashedIncoming !== invitation.registrationOTP) {
+      return next(new AppError("Invalid OTP.", 400));
+    }
+
+    // 1. Create the new User
+    // We already hashed the password, so we must disable the pre-save hook in User model
+    // Wait, User model pre-save hook runs on save(). If we do User.create(), it triggers the hook.
+    // If we pass an already hashed password, it will be double hashed!
+    // We must bypass it. The safest way is to use User.collection.insertOne or use updateOne with upsert
+    // Or we set the password, but the User model hook triggers `if (!this.isModified("password")) return next();`
+    // Alternatively, we store it in a different way or we pass plain text. But user explicitly asked to store hashed!
+    // To bypass the Mongoose hook, we can use Model.collection.insertOne
+    const newUserDoc = {
+      name: invitation.tempName,
+      email: invitation.email,
+      password: invitation.tempPasswordHash,
+      role: "student",
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    const result = await User.collection.insertOne(newUserDoc);
+    const newUser = await User.findById(result.insertedId);
+
+    // 2. Clear temp fields and verify OTP
+    invitation.registrationOTPVerified = true;
+    invitation.registrationOTP = undefined;
+    invitation.registrationOTPExpires = undefined;
+    invitation.tempName = undefined;
+    invitation.tempPasswordHash = undefined;
+    
+    // 3. Consume the invitation via shared helper logic
+    await consumeInvitationLogic(invitation, newUser.email, newUser._id);
+    
+    // 4. Generate JWT for auto login
+    const generateToken = require("../utils/generateToken");
+    const jwtToken = generateToken(newUser._id);
+
+    res.status(200).json({
+      status: "success",
+      message: "Registration successful. Invitation consumed.",
+      token: jwtToken,
+      data: {
+        examId: invitation.examId,
+        user: {
+          _id: newUser._id,
+          name: newUser.name,
+          email: newUser.email,
+          role: newUser.role
+        }
+      }
+    });
+  } catch (err) {
+    if (err.code === 11000) {
+      return next(new AppError("User with this email already exists.", 400));
+    }
     next(err);
   }
 };
