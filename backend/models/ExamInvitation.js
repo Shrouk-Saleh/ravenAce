@@ -45,7 +45,7 @@ const examInvitationSchema = new mongoose.Schema(
     
     // Temporary storage for user creation during Case B flow
     tempName: { type: String, select: false },
-    tempPasswordHash: { type: String, select: false },
+    tempPasswordEncrypted: { type: String, select: false },
   },
   { timestamps: true }
 );

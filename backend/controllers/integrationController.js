@@ -323,11 +323,11 @@ exports.registerCandidate = async (req, res, next) => {
       return next(new AppError("This invitation has expired.", 400));
     }
 
-    const bcrypt = require("bcryptjs"); // require here or at top of file, doing here for isolation just like crypto
+    const { encryptSecret } = require("../utils/encryptionUtils");
     
-    // 1. Temporarily store name and password (Hashed with 10 rounds to match User model)
+    // 1. Temporarily store name and password (Encrypted reversibly, NOT hashed)
     invitation.tempName = name;
-    invitation.tempPasswordHash = await bcrypt.hash(password, 10);
+    invitation.tempPasswordEncrypted = encryptSecret(password);
 
     // 2. Generate and store OTP (same logic as forgotPassword)
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -377,7 +377,7 @@ exports.verifyCandidateOTP = async (req, res, next) => {
     
     // Explicitly select the hidden temporary and OTP fields
     const invitation = await ExamInvitation.findOne({ tokenHash }).select(
-      "+registrationOTP +registrationOTPExpires +registrationOTPVerified +tempName +tempPasswordHash"
+      "+registrationOTP +registrationOTPExpires +registrationOTPVerified +tempName +tempPasswordEncrypted"
     );
 
     if (!invitation || !invitation.registrationOTP) {
@@ -407,38 +407,35 @@ exports.verifyCandidateOTP = async (req, res, next) => {
       return next(new AppError("Invalid OTP.", 400));
     }
 
-    // 1. Create the new User
-    // We already hashed the password, so we must disable the pre-save hook in User model
-    // Wait, User model pre-save hook runs on save(). If we do User.create(), it triggers the hook.
-    // If we pass an already hashed password, it will be double hashed!
-    // We must bypass it. The safest way is to use User.collection.insertOne or use updateOne with upsert
-    // Or we set the password, but the User model hook triggers `if (!this.isModified("password")) return next();`
-    // Alternatively, we store it in a different way or we pass plain text. But user explicitly asked to store hashed!
-    // To bypass the Mongoose hook, we can use Model.collection.insertOne
-    const newUserDoc = {
+    // 1. Decrypt the temporary password
+    const { decryptSecret } = require("../utils/encryptionUtils");
+    let decryptedPassword;
+    try {
+      decryptedPassword = decryptSecret(invitation.tempPasswordEncrypted);
+    } catch (err) {
+      return next(new AppError("Failed to decrypt temporary credentials. Please request a new OTP.", 500));
+    }
+
+    // 2. Create the new User properly using Mongoose (triggers pre-save hashing and validations)
+    const newUser = await User.create({
       name: invitation.tempName,
       email: invitation.email,
-      password: invitation.tempPasswordHash,
+      password: decryptedPassword,
       role: "student",
       isActive: true,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    
-    const result = await User.collection.insertOne(newUserDoc);
-    const newUser = await User.findById(result.insertedId);
+    });
 
-    // 2. Clear temp fields and verify OTP
+    // 3. Clear temp fields and verify OTP
     invitation.registrationOTPVerified = true;
     invitation.registrationOTP = undefined;
     invitation.registrationOTPExpires = undefined;
     invitation.tempName = undefined;
-    invitation.tempPasswordHash = undefined;
+    invitation.tempPasswordEncrypted = undefined;
     
-    // 3. Consume the invitation via shared helper logic
+    // 4. Consume the invitation via shared helper logic
     await consumeInvitationLogic(invitation, newUser.email, newUser._id);
     
-    // 4. Generate JWT for auto login
+    // 5. Generate JWT for auto login
     const generateToken = require("../utils/generateToken");
     const jwtToken = generateToken(newUser._id);
 

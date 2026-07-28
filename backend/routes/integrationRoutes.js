@@ -1,6 +1,7 @@
 const express = require("express");
 const { protect } = require("../middleware/authMiddleware");
 const { integrationAuth } = require("../middleware/integrationAuth");
+const { authLimiter } = require("../middleware/rateLimiter");
 const integrationController = require("../controllers/integrationController");
 
 const router = express.Router();
@@ -11,8 +12,8 @@ router.post("/hirehub/invitations", integrationAuth, integrationController.invit
 
 // ── Public endpoints ──
 router.get("/invitations/:token/verify", integrationController.verifyInvitation);
-router.post("/invitations/:token/register", integrationController.registerCandidate);
-router.post("/invitations/:token/verify-otp", integrationController.verifyCandidateOTP);
+router.post("/invitations/:token/register", authLimiter, integrationController.registerCandidate);
+router.post("/invitations/:token/verify-otp", authLimiter, integrationController.verifyCandidateOTP);
 
 // ── Protected endpoints (Requires user login) ──
 router.post("/invitations/:token/consume", protect, integrationController.consumeInvitation);
