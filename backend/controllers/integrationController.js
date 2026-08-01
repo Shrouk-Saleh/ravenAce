@@ -31,33 +31,46 @@ exports.createExam = async (req, res, next) => {
     if (integrationCompany) {
       systemInstructorId = integrationCompany.systemInstructorId;
     } else {
-      // Create Organization
-      const org = await Organization.create({
-        name: companyName,
-        email: `noreply-${externalCompanyId}@${req.integration.provider}.local`, // internal placeholder
-      });
-
-      // Create System Instructor
+      // 1. Create System Instructor first (organization can be null initially)
       const systemInstructor = await User.create({
         name: `${companyName} System Instructor`,
         email: `instructor-${externalCompanyId}@${req.integration.provider}.local`,
         password: Math.random().toString(36).slice(-12) + "A1!", // strong random password
         role: "instructor",
-        organization: org._id,
         isActive: true
       });
 
-      // Update Org owner
-      org.owner = systemInstructor._id;
-      await org.save({ validateBeforeSave: false });
+      let org;
+      try {
+        // 2. Create Organization with the instructor as the owner
+        org = await Organization.create({
+          name: companyName,
+          email: `noreply-${externalCompanyId}@${req.integration.provider}.local`, // internal placeholder
+          owner: systemInstructor._id
+        });
+      } catch (err) {
+        // Rollback: the instructor is orphaned without an org, remove it
+        // so a retry with the same externalCompanyId doesn't hit a duplicate-email error
+        await User.findByIdAndDelete(systemInstructor._id);
+        throw err;
+      }
 
-      // Create mapping
-      integrationCompany = await IntegrationCompany.create({
-        provider: req.integration.provider,
-        externalCompanyId,
-        organizationId: org._id,
-        systemInstructorId: systemInstructor._id
-      });
+      // 3. Update the instructor with the new organization ID
+      systemInstructor.organization = org._id;
+      await systemInstructor.save();
+
+      // 4. Create mapping — also wrap this, since if THIS fails, org+instructor exist but unmapped
+      try {
+        integrationCompany = await IntegrationCompany.create({
+          provider: req.integration.provider,
+          externalCompanyId,
+          organizationId: org._id,
+          systemInstructorId: systemInstructor._id
+        });
+      } catch (err) {
+        console.error(`CRITICAL: Org/Instructor created but IntegrationCompany mapping failed for ${externalCompanyId}`, err);
+        throw err;
+      }
       
       systemInstructorId = systemInstructor._id;
     }
