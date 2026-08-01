@@ -678,3 +678,120 @@ exports.getDetailedInvitationResult = async (req, res, next) => {
     next(err);
   }
 };
+
+exports.regradeQuestion = async (req, res, next) => {
+  try {
+    const { invitationId } = req.params;
+    const { questionId, newScore } = req.body;
+
+    if (!invitationId || !questionId || newScore === undefined) {
+      return next(new AppError("invitationId, questionId, and newScore are required.", 400));
+    }
+
+    // 1. Fetch invitation and fully populate exam with its questions
+    const ExamInvitation = require("../models/ExamInvitation");
+    const invitation = await ExamInvitation.findById(invitationId).populate({
+      path: "examId",
+      populate: { path: "questions" } // Needed for calculateScore
+    });
+
+    if (!invitation || !invitation.examId) {
+      return next(new AppError("Invitation or associated exam not found.", 404));
+    }
+
+    // 2. Security Check (IDOR Protection)
+    const IntegrationCompany = require("../models/IntegrationCompany");
+    const integrationCompany = await IntegrationCompany.findOne({
+      provider: req.integration.provider,
+      systemInstructorId: invitation.examId.instructor
+    });
+
+    if (!integrationCompany) {
+      return next(new AppError("Unauthorized to regrade this invitation.", 403));
+    }
+
+    if (invitation.status !== "consumed") {
+       return next(new AppError("Cannot regrade an unattempted exam.", 400));
+    }
+
+    // 3. Fetch the latest attempt
+    const Attempt = require("../models/Attempt");
+    const attempt = await Attempt.findOne({
+      student: invitation.ravenAceUserId,
+      exam: invitation.examId._id
+    }).sort({ createdAt: -1 });
+
+    if (!attempt) {
+      return next(new AppError("Attempt not found.", 404));
+    }
+
+    // 4. Check completed statuses
+    const completedStatuses = ["submitted", "auto-submitted", "timed-out"];
+    if (!completedStatuses.includes(attempt.status)) {
+       return next(new AppError(`Cannot regrade. Attempt is currently in status: ${attempt.status}`, 400));
+    }
+
+    // 5. Find the perQuestionResult for the specific question
+    const resultIndex = attempt.perQuestionResult.findIndex(
+      r => r.question.toString() === questionId
+    );
+
+    if (resultIndex === -1) {
+      return next(new AppError("Question result not found in this attempt.", 404));
+    }
+
+    const targetResult = attempt.perQuestionResult[resultIndex];
+
+    // Find the original question definition from the fully populated exam
+    const questionDef = invitation.examId.questions.find(q => q._id.toString() === questionId);
+    if (!questionDef) {
+       return next(new AppError("Question definition not found in the exam.", 404));
+    }
+
+    // 6. Validation: Only allow regrading for written/coding
+    if (questionDef.type !== "written" && questionDef.type !== "coding") {
+      return next(new AppError("Manual re-grade is only allowed for written/coding questions.", 400));
+    }
+
+    // 7. Validation: Score boundaries
+    const maxAllowedScore = questionDef.maxScore || 10;
+    if (typeof newScore !== "number" || newScore < 0 || newScore > maxAllowedScore) {
+       return next(new AppError(`newScore must be a number between 0 and ${maxAllowedScore}.`, 400));
+    }
+
+    // 8. Update the individual score and record history
+    const oldScore = targetResult.score;
+    attempt.perQuestionResult[resultIndex].score = newScore;
+    
+    attempt.regradeHistory.push({
+      provider: req.integration.provider,
+      timestamp: Date.now(),
+      question: questionId,
+      oldScore,
+      newScore
+    });
+
+    // 9. Recalculate the entire attempt score using the shared function
+    const { calculateScore } = require("./attemptController");
+    attempt.score = calculateScore(invitation.examId.questions, attempt.perQuestionResult, invitation.examId.totalScore);
+    attempt.passed = attempt.score >= invitation.examId.passingScore;
+
+    await attempt.save();
+
+    res.status(200).json({
+      status: "success",
+      data: {
+        newTotalScore: attempt.score,
+        passed: attempt.passed,
+        regradedQuestion: {
+          questionId,
+          oldScore,
+          newScore
+        }
+      }
+    });
+
+  } catch (err) {
+    next(err);
+  }
+};

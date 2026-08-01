@@ -128,6 +128,16 @@ const attemptSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "AiAnalysis",
     },
+    // ── Manual Regrade History ────────────────────────────────────────────
+    regradeHistory: [
+      {
+        provider: { type: String, required: true }, // e.g., "hirehub"
+        timestamp: { type: Date, default: Date.now },
+        question: { type: mongoose.Schema.Types.ObjectId, ref: "Question", required: true },
+        oldScore: { type: Number, required: true },
+        newScore: { type: Number, required: true },
+      }
+    ],
   },
   { timestamps: true }
 );
