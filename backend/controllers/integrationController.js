@@ -567,4 +567,114 @@ exports.getInvitationResult = async (req, res, next) => {
   }
 };
 
+exports.getDetailedInvitationResult = async (req, res, next) => {
+  try {
+    const { invitationId } = req.params;
 
+    if (!invitationId) {
+      return next(new AppError("invitationId is required.", 400));
+    }
+
+    // 1. Fetch invitation and populate exam
+    const ExamInvitation = require("../models/ExamInvitation");
+    const invitation = await ExamInvitation.findById(invitationId).populate("examId");
+
+    if (!invitation || !invitation.examId) {
+      return next(new AppError("Invitation or associated exam not found.", 404));
+    }
+
+    // 2. Security Check (IDOR Protection)
+    const IntegrationCompany = require("../models/IntegrationCompany");
+    const integrationCompany = await IntegrationCompany.findOne({
+      provider: req.integration.provider,
+      systemInstructorId: invitation.examId.instructor
+    });
+
+    if (!integrationCompany) {
+      return next(new AppError("Unauthorized to view detailed results for this invitation.", 403));
+    }
+
+    // 3. Status check: No need to query Attempt if they haven't even started
+    if (invitation.status === "pending" || invitation.status === "expired" || invitation.status === "registered") {
+      return res.status(200).json({
+        status: "success",
+        message: "No attempt exists yet.",
+        data: null
+      });
+    }
+
+    // 4. Fetch the latest attempt and populate question details
+    const Attempt = require("../models/Attempt");
+    const attempt = await Attempt.findOne({
+      student: invitation.ravenAceUserId,
+      exam: invitation.examId._id
+    })
+      .sort({ createdAt: -1 })
+      .populate("perQuestionResult.question", "text type category maxScore");
+
+    if (!attempt) {
+      return res.status(200).json({
+        status: "success",
+        message: "Attempt not found despite consumed invitation.",
+        data: null
+      });
+    }
+
+    // 5. Ensure the attempt is fully completed and graded
+    const completedStatuses = ["submitted", "auto-submitted", "timed-out"];
+    if (!completedStatuses.includes(attempt.status)) {
+       return res.status(200).json({
+         status: "success",
+         message: "Attempt is not yet completed or graded.",
+         data: { status: attempt.status, results: null }
+       });
+    }
+
+    // 6. Map the detailed results
+    const detailedResults = attempt.perQuestionResult.map(result => {
+      const qType = result.question?.type || "unknown";
+
+      return {
+        questionId: result.question?._id,
+        questionText: result.question?.text,
+        questionType: qType,
+        questionCategory: result.question?.category,
+        
+        // Shared answers
+        studentAnswer: result.studentAnswer,
+        isCorrect: result.isCorrect,
+        
+        // Correct Answer (meaningful mainly for objective questions like MCQ/TF)
+        correctAnswer: result.correctAnswer,
+        
+        // AI Graded details (Written/Coding)
+        score: result.score,
+        maxScore: result.maxScore || result.question?.maxScore || 0,
+        aiFeedback: result.feedback,
+        strengths: result.strengths,
+        weaknesses: result.weaknesses,
+        
+        // Code specific details
+        language: result.language,
+        codeReview: result.codeReview,
+        testCasesPassed: result.testResults ? result.testResults.filter(t => t.passed).length : 0,
+        testCasesTotal: result.testResults ? result.testResults.length : 0
+      };
+    });
+
+    res.status(200).json({
+      status: "success",
+      data: {
+        attemptId: attempt._id,
+        status: attempt.status,
+        score: attempt.score,
+        passed: attempt.passed,
+        timeTaken: attempt.timeTaken,
+        results: detailedResults
+      }
+    });
+
+  } catch (err) {
+    next(err);
+  }
+};
