@@ -294,7 +294,7 @@ const startExam = async (req, res, next) => {
     const hasConsumedInvitation = await ExamInvitation.findOne({
       examId: exam._id,
       ravenAceUserId: req.user._id,
-      status: "consumed"
+      status: { $in: ["registered", "consumed"] }
     });
 
     if (!hasConsumedInvitation) {
@@ -372,6 +372,12 @@ const startExam = async (req, res, next) => {
       questions: questionIds,
       attemptNumber: completedCount + 1,
     });
+
+    // تحديث حالة الدعوة لتعكس أن الامتحان قد بدأ فعلياً
+    await ExamInvitation.updateOne(
+      { examId: exam._id, ravenAceUserId: req.user._id, status: "registered" },
+      { $set: { status: "consumed", consumedAt: Date.now() } }
+    );
 
     await attempt.populate("questions");
     await attempt.populate("exam", "title duration totalScore passingScore");

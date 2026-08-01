@@ -19,7 +19,7 @@ const examInvitationSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["pending", "consumed", "expired"],
+      enum: ["pending", "registered", "consumed", "expired"],
       default: "pending",
     },
     ravenAceUserId: {

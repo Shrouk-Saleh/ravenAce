@@ -101,7 +101,7 @@ const getExamById = async (req, res, next) => {
       const hasConsumedInvitation = await ExamInvitation.findOne({
         examId: exam._id,
         ravenAceUserId: req.user._id,
-        status: "consumed"
+        status: { $in: ["registered", "consumed"] }
       });
 
       if (!hasConsumedInvitation && !isAuthorizedForOrg()) {

@@ -264,12 +264,11 @@ exports.verifyInvitation = async (req, res, next) => {
 
 // --- Helper function for robust consumption logic ---
 // Can throw an AppError which is caught by the calling endpoint's catch block.
-const consumeInvitationLogic = async (invitation, userEmail, userId) => {
+const confirmInvitationIdentity = async (invitation, userEmail, userId) => {
   if (userEmail.toLowerCase() !== invitation.email.toLowerCase()) {
     throw new AppError("This invitation was sent to a different email address.", 403);
   }
-  invitation.status = "consumed";
-  invitation.consumedAt = Date.now();
+  invitation.status = "registered";
   invitation.ravenAceUserId = userId;
   await invitation.save();
 };
@@ -303,7 +302,7 @@ exports.consumeInvitation = async (req, res, next) => {
     }
 
     // Call the shared helper
-    await consumeInvitationLogic(invitation, req.user.email, req.user._id);
+    await confirmInvitationIdentity(invitation, req.user.email, req.user._id);
 
     res.status(200).json({
       status: "success",
@@ -454,7 +453,7 @@ exports.verifyCandidateOTP = async (req, res, next) => {
     invitation.tempPasswordEncrypted = undefined;
     
     // 4. Consume the invitation via shared helper logic
-    await consumeInvitationLogic(invitation, newUser.email, newUser._id);
+    await confirmInvitationIdentity(invitation, newUser.email, newUser._id);
     
     // 5. Generate JWT for auto login
     const generateToken = require("../utils/generateToken");
@@ -508,15 +507,15 @@ exports.getInvitationResult = async (req, res, next) => {
     }
 
     // 4. Status mapping logic
-    if (invitation.status !== "consumed") {
-      // Pending or expired -> has not opened link / logged in
-      return res.status(200).json({
-        status: "success",
-        data: { status: "not_started" }
-      });
+    if (invitation.status === "pending" || invitation.status === "expired") {
+      return res.status(200).json({ status: "success", data: { status: "not_started" } });
+    }
+    
+    if (invitation.status === "registered") {
+      return res.status(200).json({ status: "success", data: { status: "registered" } });
     }
 
-    // Invitation is consumed: User logged in / registered. Look for an Attempt.
+    // Invitation is consumed: Attempt definitely exists. Fetch the latest.
     const Attempt = require("../models/Attempt");
     
     // Sort by createdAt descending to get the latest attempt if there are multiple
@@ -525,12 +524,9 @@ exports.getInvitationResult = async (req, res, next) => {
       exam: invitation.examId._id
     }).sort({ createdAt: -1 });
 
+    // Defensive fallback just in case
     if (!attempt) {
-      // Consumed but no attempt started yet
-      return res.status(200).json({
-        status: "success",
-        data: { status: "registered" }
-      });
+      return res.status(200).json({ status: "success", data: { status: "registered" } });
     }
 
     // Attempt exists. Map the complex enum to a simple one for HireHub.
