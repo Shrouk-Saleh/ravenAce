@@ -795,3 +795,68 @@ exports.regradeQuestion = async (req, res, next) => {
     next(err);
   }
 };
+
+exports.generateLink = async (req, res, next) => {
+  try {
+    const { invitationId } = req.params;
+
+    if (!invitationId) {
+      return next(new AppError("invitationId is required.", 400));
+    }
+
+    const ExamInvitation = require("../models/ExamInvitation");
+    const invitation = await ExamInvitation.findById(invitationId).populate("examId");
+
+    if (!invitation || !invitation.examId) {
+      return next(new AppError("Invitation or associated exam not found.", 404));
+    }
+
+    // 1. Security Check (IDOR Protection)
+    const IntegrationCompany = require("../models/IntegrationCompany");
+    const integrationCompany = await IntegrationCompany.findOne({
+      provider: req.integration.provider,
+      systemInstructorId: invitation.examId.instructor
+    });
+
+    if (!integrationCompany) {
+      return next(new AppError("Unauthorized to generate link for this invitation.", 403));
+    }
+
+    // 2. Check if already consumed
+    if (invitation.status === "consumed") {
+      return res.status(200).json({ 
+        status: "success", 
+        data: { alreadyStarted: true }
+      });
+    }
+
+    // 3. Generate new token logic (copied exactly from inviteCandidate)
+    const crypto = require("crypto");
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+    
+    // Exact 7 days expiration
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    invitation.tokenHash = tokenHash;
+    invitation.expiresAt = expiresAt;
+    
+    // If it was somehow expired or something else, make sure it is pending. 
+    // If it is registered, leave it registered so they don't lose their identity validation.
+    if (invitation.status !== "registered") {
+      invitation.status = "pending";
+    }
+
+    await invitation.save();
+
+    // 4. Return link without sending email
+    const inviteUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/invite/${rawToken}`;
+
+    res.status(200).json({ 
+      status: "success", 
+      data: { inviteUrl }
+    });
+  } catch (err) {
+    next(err);
+  }
+};

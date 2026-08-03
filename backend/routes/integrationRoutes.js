@@ -12,6 +12,7 @@ router.post("/hirehub/invitations", integrationAuth, integrationController.invit
 router.get("/hirehub/invitations/:invitationId/result", integrationAuth, integrationController.getInvitationResult);
 router.get("/hirehub/invitations/:invitationId/detailed-result", integrationAuth, integrationController.getDetailedInvitationResult);
 router.patch("/hirehub/invitations/:invitationId/regrade", integrationAuth, integrationController.regradeQuestion);
+router.post("/hirehub/invitations/:invitationId/generate-link", integrationAuth, integrationController.generateLink);
 
 // ── Public endpoints ──
 router.get("/invitations/:token/verify", integrationController.verifyInvitation);
